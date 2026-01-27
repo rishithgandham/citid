@@ -1,6 +1,6 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, make_response
 from models import db, Users
-from flask_jwt_extended import create_access_token
+from flask_jwt_extended import create_access_token, set_access_cookies
 from schemas import validate_register, validate_login
 
 
@@ -34,9 +34,11 @@ def register():
     db.session.add(user)
     db.session.commit() 
     
-    # Create JWT token and return it (auto-login after registration)
+    # Create JWT token and set it as HTTP cookie (auto-login after registration)
     access_token = create_access_token(identity=user.id)
-    return jsonify({"msg": "User created successfully", "token": access_token}), 201
+    response = make_response(jsonify({"msg": "User created successfully"}), 201)
+    set_access_cookies(response, access_token)
+    return response
 
 
 
@@ -59,6 +61,8 @@ def login():
     if not user or not user.check_password(validated_data["password"]):
         return jsonify({"msg": "Bad credentials"}), 401
     
-    # Create JWT token
+    # Create JWT token and set it as HTTP cookie
     access_token = create_access_token(identity=user.id)
-    return jsonify({"token": access_token}), 200
+    response = make_response(jsonify({"msg": "Login successful"}), 200)
+    set_access_cookies(response, access_token)
+    return response

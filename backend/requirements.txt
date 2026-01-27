@@ -1,6 +1,7 @@
 Flask
 Flask-JWT-Extended
 Flask-SQLAlchemy
+Flask-CORS
 psycopg2-binary
 python-dotenv
 marshmallow
