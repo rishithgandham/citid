@@ -1,19 +1,15 @@
 // Authentication Service 
 // makes API calls for authentication routes (login, register)
 
-import axios from 'axios';
+import { api, refreshApi } from './axios';
 
-const API_URL = 'http://localhost:5000/auth';
-
-// Configure axios to send cookies with requests (needed for HTTP-only cookies)
-axios.defaults.withCredentials = true;
 
 // Register Function
 // Makes a POST request to the register route with the email and password
 // Returns the response data (token is set as HTTP cookie)
 export const register = async (email: string, password: string) => {
     console.log("Registering user...", email, password);
-    const response = await axios.post(`${API_URL}/register`, { email, password });
+    const response = await api.post(`/auth/register`, { email, password });
     return response.data;
 };
 
@@ -22,8 +18,26 @@ export const register = async (email: string, password: string) => {
 // Returns the response data (token is set as HTTP cookie)
 export const login = async (email: string, password: string) => {
     console.log("Logging in...", email, password);
-    const response = await axios.post(`${API_URL}/login`, { email, password });
+    const response = await api.post(`/auth/login`, { email, password });
+    return response.data;
+};
+
+// Logout Function
+// Makes a POST request to the logout route
+// Returns the response data (token is removed in HTTP cookie)
+export const logout = async () => {
+    console.log("Logging out...");
+    const response = await api.post(`/auth/logout`);
     return response.data;
 };
 
 
+
+// Refresh Function
+// Makes a POST request to the refresh route
+// Returns the response data (new access token is set as HTTP cookie)
+export const refresh = async () => {
+    console.log("Refreshing token...");
+    const response = await refreshApi.post(`/auth/refresh`);
+    return response.data;
+};

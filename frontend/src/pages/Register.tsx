@@ -10,10 +10,15 @@ function Register() {
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
-  const { refreshProfile } = useAuth()
 
-  
+  const { refreshProfile, isAuthenticated } = useAuth()
+  const navigate = useNavigate()
+
+  if (isAuthenticated) {
+    navigate('/protected')
+  }
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setError('')

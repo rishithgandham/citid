@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useState, type ReactNode } from "
 import { getProfile } from "../services/user";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { refresh } from "../services/auth";
 
 type AuthContextType = {
   email: string | null;
@@ -13,7 +14,6 @@ type AuthContextType = {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
-  const navigate = useNavigate();
   const [email, setEmail] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -24,7 +24,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 401) {
         setEmail(null);
-        navigate("/login");
+        // refresh();
+        // const profile = await getProfile();
+        // setEmail(profile.email);
+        // return profile;
       } else {
         console.error("Error fetching profile:", err);
       }
@@ -32,6 +35,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setLoading(false);
     }
   };
+
 
   useEffect(() => {
     refreshProfile();

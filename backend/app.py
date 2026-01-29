@@ -1,7 +1,7 @@
 from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from flask_cors import CORS
-from models import db, Users
+from models import db, Users, RefreshToken
 from auth import auth_bp
 from config import Config
 
@@ -20,9 +20,9 @@ jwt = JWTManager(app)
 app.register_blueprint(auth_bp, url_prefix="/auth")
 
 # Dont know what is does, but creates the tables in the db before the first request
-with app.app_context():
-    db.drop_all()
-    db.create_all()
+# with app.app_context():
+    # db.drop_all()
+    # db.create_all()
 
 
 # Profile route that the frontend can access to validate login state
@@ -36,3 +36,15 @@ def profile():
 
 if __name__ == "__main__":
     app.run(debug=True)
+    
+    
+"""
+The check_if_token_revoked function checks if the refresh token is revoked.
+If it is revoked, it returns True, otherwise it returns False.
+"""
+@jwt.token_in_blocklist_loader
+def check_if_token_revoked(jwt_header, jwt_payload):
+    jti = jwt_payload["jti"]
+    token = RefreshToken.query.filter_by(jti=jti).first()
+    return token is not None and token.revoked
+

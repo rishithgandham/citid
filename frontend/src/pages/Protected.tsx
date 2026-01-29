@@ -1,4 +1,5 @@
 import { useProtectedRoute } from "../context/AuthContext";
+import { logout } from "../services/auth";
 
 
 
@@ -10,7 +11,10 @@ function Protected() {
     if (loading) return <div>Loading...</div>;
 
     return (
-        <div>Protected {email}</div>
+        <div>
+            <div>Protected {email}</div>
+            <button onClick={logout}>Logout</button>
+        </div>
     )
 }
 
