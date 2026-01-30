@@ -104,7 +104,10 @@ def refresh():
     # Check if the refresh token is valid and not revoked
     token = RefreshToken.query.filter_by(jti=jti, user_id=user_id).first()
     if not token or token.revoked:
-        return jsonify({"msg": "Invalid refresh token"}), 401
+        response = make_response(jsonify({"msg": "Invalid refresh token"}), 401)
+        unset_jwt_cookies(response)
+        return response
+        
     
     # Create a new access token
     access_token = create_access_token(identity=user_id)
