@@ -3,8 +3,7 @@ import { useProtectedRoute } from "../context/AuthContext";
 
 
 
-// Protected Page -- Temp Page
-function Protected() {
+function Dashboard() {
     const { email, loading, logoutUser } = useProtectedRoute();
 
     if (loading) return <div>Loading...</div>;
@@ -17,4 +16,4 @@ function Protected() {
     )
 }
 
-export default Protected
+export default Dashboard
