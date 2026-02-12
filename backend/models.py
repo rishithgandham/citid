@@ -12,6 +12,7 @@ class Users(db.Model):
     last_name = db.Column(db.String(120), nullable=False)
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
     app_admin = db.Column(db.Boolean, default=False)
+    email_verified = db.Column(db.Boolean, default=False)
     def set_password(self, password):
         self.password_hash = generate_password_hash(password)
 
