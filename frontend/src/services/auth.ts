@@ -13,7 +13,7 @@ export const register = async (
     email: string,
     password: string
 ) => {
-    const response = await api.post(`/auth/register`, {
+    const response = await refreshApi.post(`/auth/register`, {
         first_name: firstName,
         last_name: lastName,
         email,
@@ -27,7 +27,7 @@ export const register = async (
 // Returns the response data (token is set as HTTP cookie)
 export const login = async (email: string, password: string) => {
     console.log("Logging in...", email, password);
-    const response = await api.post(`/auth/login`, { email, password });
+    const response = await refreshApi.post(`/auth/login`, { email, password });
     return response.data;
 };
 

@@ -2,8 +2,8 @@ import React, { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { register } from '../services/auth'
 import { useAuth } from '../context/AuthContext'
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/card'
-import { Field, FieldLabel, FieldDescription, FieldGroup } from '../components/ui/field'
+import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
+import { Field, FieldLabel, FieldGroup } from '../components/ui/field'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import citLogo from '../assets/images/citlogo.png'
@@ -13,8 +13,8 @@ function Register() {
   const [lastName, setLastName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
-  const [showPassword, setShowPassword] = useState(false)
   const [error, setError] = useState('')
+
   const [loading, setLoading] = useState(false)
 
   const { refreshProfile, isAuthenticated } = useAuth()
@@ -28,7 +28,6 @@ function Register() {
     e.preventDefault()
     setError('')
     setLoading(true)
-
     try {
       await register(firstName, lastName, email, password)
       await refreshProfile()
@@ -100,7 +99,7 @@ function Register() {
                   <Input id="password" type="password" required value={password} onChange={(e) => setPassword(e.target.value)} />
                 </Field>
                 <Field className="mt-5">
-                  <Button type="submit" className="shadow-2xl">Register</Button>
+                  <Button type="submit" className="shadow-2xl" disabled={loading}>{loading ? 'Registering...' : 'Register'}</Button>
                   {error && <p className="text-sm text-center mt-1 text-destructive">{error}</p>}
                   <Link to="/login" className="text-sm text-center mt-1 text-muted-foreground hover:underline">Already have an account? Login</Link>
                 </Field>
