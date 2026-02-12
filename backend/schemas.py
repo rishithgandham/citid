@@ -1,6 +1,9 @@
 from marshmallow import Schema, fields, validate, ValidationError
 from flask import jsonify
 
+
+# Schemas for form validation on the server side.
+
 """
 Creates registration and login schemas using the marshmallow library for validation.
 Straightforward - fields.(type) required=True, error_messages={"required": "Error message"}
@@ -12,6 +15,8 @@ class RegisterSchema(Schema):
         validate=validate.Length(min=8, error="Password must be at least 8 characters long"),
         error_messages={"required": "Password is required"}
     )
+    first_name = fields.Str(required=True, error_messages={"required": "First name is required"})
+    last_name = fields.Str(required=True, error_messages={"required": "Last name is required"})
 
 
 class LoginSchema(Schema):
