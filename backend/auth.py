@@ -25,11 +25,13 @@ def register():
     
     email = validated_data["email"]
     password = validated_data["password"]
+    first_name = validated_data["first_name"]
+    last_name = validated_data["last_name"]
     
     # Check if user already exists, and create new user if not
     if Users.query.filter_by(email=email).first():
         return jsonify({"msg": "User with this email already exists"}), 400
-    user = Users(email=email)
+    user = Users(email=email, first_name=first_name, last_name=last_name)
     user.set_password(password)
     db.session.add(user)
     db.session.commit() 
