@@ -9,18 +9,23 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom'
 import App from './pages/App.tsx'
 import Login from './pages/Login.tsx'
 import Register from './pages/Register.tsx'
-import Protected from './pages/Protected.tsx'
+import Dashboard from './pages/Dashboard.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
+
+
+
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <BrowserRouter>
       <AuthProvider>
         <Routes>
-          <Route path="/" element={<App />} />
+          <Route element={<App />} >
+            <Route path="/" element={<Dashboard />} />
+          </Route>
+
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
-          <Route path="/protected" element={<Protected />} />
         </Routes>
       </AuthProvider>
     </BrowserRouter>

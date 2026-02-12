@@ -21,7 +21,7 @@ function Register() {
   const navigate = useNavigate()
 
   if (isAuthenticated) {
-    navigate('/protected')
+    navigate('/')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -31,7 +31,7 @@ function Register() {
     try {
       await register(firstName, lastName, email, password)
       await refreshProfile()
-      navigate('/protected')
+      navigate('/')
     } catch (err: any) {
       setError(err?.response?.data?.msg || 'Registration failed. Please try again.')
     } finally {

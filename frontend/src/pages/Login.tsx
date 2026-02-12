@@ -20,7 +20,7 @@ function Login() {
   const { refreshProfile, isAuthenticated } = useAuth()
 
   if (isAuthenticated) {
-    navigate('/protected')
+    navigate('/')
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -32,7 +32,7 @@ function Login() {
       await login(email, password)
       await refreshProfile()
 
-      navigate('/protected')
+      navigate('/')
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Login failed. Please try again.')
       console.error('Login error:', err)
