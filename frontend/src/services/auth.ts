@@ -5,11 +5,20 @@ import { api, refreshApi } from './axios';
 
 
 // Register Function
-// Makes a POST request to the register route with the email and password
+// Makes a POST request to the register route with first name, last name, email and password
 // Returns the response data (token is set as HTTP cookie)
-export const register = async (email: string, password: string) => {
-    console.log("Registering user...", email, password);
-    const response = await api.post(`/auth/register`, { email, password });
+export const register = async (
+    firstName: string,
+    lastName: string,
+    email: string,
+    password: string
+) => {
+    const response = await api.post(`/auth/register`, {
+        first_name: firstName,
+        last_name: lastName,
+        email,
+        password,
+    });
     return response.data;
 };
 

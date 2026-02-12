@@ -21,8 +21,8 @@ app.register_blueprint(auth_bp, url_prefix="/auth")
 
 # Dont know what is does, but creates the tables in the db before the first request
 # with app.app_context():
-    # db.drop_all()
-    # db.create_all()
+#     db.drop_all()
+#     db.create_all()
 
 
 # Profile route that the frontend can access to validate login state
