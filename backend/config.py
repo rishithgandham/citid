@@ -23,5 +23,5 @@ class Config:
     JWT_COOKIE_CSRF_PROTECT = False  # enable later
     
     SERVER_NAME = os.getenv("SERVER_NAME", "drhscit.test:5000")
-    
+    COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", "drhscit.test")
     

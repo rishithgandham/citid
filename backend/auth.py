@@ -49,8 +49,8 @@ def register():
     
     # Return response with access and refresh tokens
     response = make_response(jsonify({"msg": "User created successfully"}), 201)
-    set_access_cookies(response, access_token)
-    set_refresh_cookies(response, refresh_token)
+    set_access_cookies(response, access_token, domain=current_app.config["COOKIE_DOMAIN"])
+    set_refresh_cookies(response, refresh_token, domain=current_app.config["COOKIE_DOMAIN"])
     return response
 
 
@@ -87,8 +87,8 @@ def login():
     
     # Return response with access and refresh tokens
     response = make_response(jsonify({"msg": "Login successful"}), 200)
-    set_access_cookies(response, access_token)
-    set_refresh_cookies(response, refresh_token)
+    set_access_cookies(response, access_token, domain=current_app.config["COOKIE_DOMAIN"])
+    set_refresh_cookies(response, refresh_token, domain=current_app.config["COOKIE_DOMAIN"])
     return response
 
 
@@ -116,7 +116,7 @@ def refresh():
     
     # Return response with new access token
     response = make_response(jsonify({"msg": "Token refreshed"}), 200)
-    set_access_cookies(response, access_token)
+    set_access_cookies(response, access_token, domain=current_app.config["COOKIE_DOMAIN"])
     return response
 
 
@@ -138,6 +138,6 @@ def logout():
     
     # Return response with success message
     response = make_response(jsonify({"msg": "Logout successful"}), 200)
-    unset_jwt_cookies(response)
+    unset_jwt_cookies(response, domain=current_app.config["COOKIE_DOMAIN"])
     return response
 
