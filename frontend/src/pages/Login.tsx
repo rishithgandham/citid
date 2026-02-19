@@ -11,7 +11,7 @@ import citLogo from '../assets/images/citlogo.png'
 
 function Login() {
 
-  
+
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
@@ -29,12 +29,16 @@ function Login() {
     setLoading(true)
 
     try {
-      await login(email, password)
+      const response = await login(email, password)
       await refreshProfile()
 
       navigate('/')
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Login failed. Please try again.')
+      if (err.response?.status === 403) {
+        navigate('/verify-pending')
+      }
+
       console.error('Login error:', err)
     } finally {
       setLoading(false)
@@ -66,7 +70,7 @@ function Login() {
                     onChange={(e) => setEmail(e.target.value)}
                   />
                 </Field>
-                
+
                 <Field>
                   <div className="flex items-center">
                     <FieldLabel htmlFor="password">Password</FieldLabel>

@@ -19,6 +19,8 @@ export const register = async (
         email,
         password,
     });
+
+
     return response.data;
 };
 
@@ -28,7 +30,7 @@ export const register = async (
 export const login = async (email: string, password: string) => {
     console.log("Logging in...", email, password);
     const response = await refreshApi.post(`/auth/login`, { email, password });
-    return response.data;
+    return response;
 };
 
 // Logout Function
@@ -48,5 +50,13 @@ export const logout = async () => {
 export const refresh = async () => {
     console.log("Refreshing token...");
     const response = await refreshApi.post(`/auth/refresh`);
+    return response.data;
+};
+
+// Resend Verification Email Function
+// Makes a POST request to the resend verification email route with the email
+// Returns the response data
+export const resendVerificationEmail = async (email: string) => {
+    const response = await api.post(`/auth/resend_verification_email`, { email });
     return response.data;
 };
