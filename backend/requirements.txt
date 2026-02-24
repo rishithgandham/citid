@@ -5,3 +5,4 @@ Flask-CORS
 psycopg2-binary
 python-dotenv
 marshmallow
+flask-mail

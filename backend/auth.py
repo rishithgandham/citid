@@ -1,8 +1,10 @@
-from flask import Blueprint, request, jsonify, make_response
+from datetime import timedelta
+from flask import Blueprint, redirect, request, jsonify, make_response, url_for
+from utils.email import send_email
 from models import db, Users, RefreshToken
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, set_access_cookies, create_refresh_token, set_refresh_cookies, get_jwt, unset_jwt_cookies, decode_token
 from schemas import validate_register, validate_login
-from flask import current_app
+from jwt import ExpiredSignatureError
 
 # Flask Blueprint, a way to organize routes into separate files, 
 # this one is for auth routes login and register
@@ -36,25 +38,62 @@ def register():
     db.session.add(user)
     db.session.commit() 
     
-    # Create JWT tokens and set them as HTTP cookies (auto-login after registration)
-    access_token = create_access_token(identity=user.id)
-    refresh_token = create_refresh_token(identity=user.id)
+    # Send verification email
+    verification_token = create_access_token(identity=user.id, additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
+    send_email(email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
     
-    # Store refresh token in database
-    # Decode the refresh token to get its JTI
-    decoded_token = decode_token(refresh_token)
-    jti = decoded_token["jti"]
-    db.session.add(RefreshToken(jti=jti, user_id=user.id))
-    db.session.commit()
     
-    # Return response with access and refresh tokens
-    response = make_response(jsonify({"msg": "User created successfully"}), 201)
-    set_access_cookies(response, access_token, domain=current_app.config["COOKIE_DOMAIN"])
-    set_refresh_cookies(response, refresh_token, domain=current_app.config["COOKIE_DOMAIN"])
+    response = make_response(jsonify({"msg": "User created successfully, please check your email for verification"}), 201)
+
     return response
 
 
+"""
+The verify_email function gets the verification token from the URL and verifies the email.
+If the email is verified, it creates the auth tokens and returns it.
+"""
+@auth_bp.route("/verify_email/<token>", methods=["GET"])
+def verify_email(token):
+    try: 
+        decoded_token = decode_token(token)
+        user_id = decoded_token["sub"]
+        user = Users.query.get(user_id)
+        if user:
+            # Set email verified to True
+            user.email_verified = True
+            db.session.commit()
+            return redirect('http://localhost:5173/login')
+        else:
+            return jsonify({"msg": "Invalid verification token"}), 400
+    except ExpiredSignatureError as e:
+        return jsonify({"msg": "Verification token expired"}), 400
+    except Exception as e:
+        return jsonify({"msg": "Invalid verification token"}), 400
 
+
+"""
+The resend_verification_email function sends a new verification email to the user.
+If the email is not found, it returns a message saying that if the email exists, a verification link was sent to it.
+"""
+@auth_bp.route("/resend_verification_email", methods=["POST"])
+def resend_verification_email():
+    email = request.json.get("email")
+    
+    if not email:
+        return jsonify({"msg": "Email is required"}), 400
+    
+    
+    
+    user = Users.query.filter_by(email=email).first()
+    
+    
+    if user:
+        if user.email_verified:
+            return jsonify({"msg": "Email already verified"}), 400
+        verification_token = create_access_token(identity=user.id, additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
+        send_email(email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
+        
+    return jsonify({"msg": "If that email exists, a verification link was sent to it."}), 404
 
 """
 The login function gets the email and password from the request body and checks if the user exists 
@@ -69,10 +108,15 @@ def login():
     if error_response:
         return error_response
     
-    # Check if user exists and password is correct
+    # Check if user exists and password is correct or if email is not verified
     user = Users.query.filter_by(email=validated_data["email"]).first()
     if not user or not user.check_password(validated_data["password"]):
         return jsonify({"msg": "Bad credentials"}), 401
+    
+    if not user.email_verified:
+        verification_token = create_access_token(identity=user.id, additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
+        send_email(user.email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
+        return jsonify({"msg": "Email not verified, a verification link was sent to your email"}), 403
     
     # Create JWT token and set it as HTTP cookie
     access_token = create_access_token(identity=user.id)

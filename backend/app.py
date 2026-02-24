@@ -1,6 +1,7 @@
 from flask import Flask, jsonify
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from flask_cors import CORS
+from flask_mail import Mail
 from models import db, Users, RefreshToken
 from auth import auth_bp
 from config import Config
@@ -14,6 +15,9 @@ CORS(app, origins=["http://localhost:5173", "http://identity.drhscit.test:5173",
 # Initialize the database and JWT manager
 db.init_app(app)
 jwt = JWTManager(app)
+
+# Initialize the mail extension
+mail = Mail(app)
 
 # Registers the auth blueprint from auth.py
 # Blueprint is a way to organize routes into separate files

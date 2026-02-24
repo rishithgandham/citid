@@ -30,8 +30,8 @@ function Register() {
     setLoading(true)
     try {
       await register(firstName, lastName, email, password)
-      await refreshProfile()
-      navigate('/')
+      localStorage.setItem('email', email)
+      navigate('/verify-pending')
     } catch (err: any) {
       setError(err?.response?.data?.msg || 'Registration failed. Please try again.')
     } finally {

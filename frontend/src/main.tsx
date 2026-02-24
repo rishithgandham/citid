@@ -10,6 +10,7 @@ import App from './pages/App.tsx'
 import Login from './pages/Login.tsx'
 import Register from './pages/Register.tsx'
 import Dashboard from './pages/Dashboard.tsx'
+import VerifyPending from './pages/VerifyPending.tsx'
 import { AuthProvider } from './context/AuthContext.tsx'
 
 
@@ -23,6 +24,7 @@ createRoot(document.getElementById('root')!).render(
           <Route element={<App />} >
             <Route path="/" element={<Dashboard />} />
           </Route>
+          <Route path="/verify-pending" element={<VerifyPending />} />
 
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
