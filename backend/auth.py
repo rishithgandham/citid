@@ -1,5 +1,5 @@
 from datetime import timedelta
-from flask import Blueprint, redirect, request, jsonify, make_response, url_for
+from flask import Blueprint, current_app, redirect, request, jsonify, make_response, url_for
 from utils.email import send_email
 from models import db, Users, RefreshToken
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, set_access_cookies, create_refresh_token, set_refresh_cookies, get_jwt, unset_jwt_cookies, decode_token

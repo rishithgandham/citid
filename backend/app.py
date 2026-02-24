@@ -10,7 +10,7 @@ app = Flask(__name__)
 app.config.from_object(Config)
 
 # Enable CORS with credentials support for frontend
-CORS(app, origins=["http://localhost:5173", "http://identity.drhscit.test:5173", "http://identity.drhscit.org", "http://drhscit.org"], supports_credentials=True)
+CORS(app, origins=["http://localhost:5173", "http://identity.drhscit.test:5173", "http://identity.drhscit.org", "http://drhscit.org", 'http://drhscit.test:5173'], supports_credentials=True)
 
 # Initialize the database and JWT manager
 db.init_app(app)
