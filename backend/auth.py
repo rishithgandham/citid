@@ -6,8 +6,7 @@ from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_requir
 from schemas import validate_register, validate_login
 from jwt import ExpiredSignatureError
 
-# Flask Blueprint, a way to organize routes into separate files, 
-# this one is for auth routes login and register
+
 auth_bp = Blueprint("auth", __name__)
 
 
@@ -62,7 +61,7 @@ def verify_email(token):
             # Set email verified to True
             user.email_verified = True
             db.session.commit()
-            return redirect('http://localhost:5173/login')
+            return redirect('http://identity.drhscit.test:5173/login')
         else:
             return jsonify({"msg": "Invalid verification token"}), 400
     except ExpiredSignatureError as e:
@@ -135,6 +134,21 @@ def login():
     set_refresh_cookies(response, refresh_token, domain=current_app.config["COOKIE_DOMAIN"])
     return response
 
+
+"""
+The authorize function gets the JWT token from the request cookies and checks if the user is authorized.
+If the user is authorized, it returns a success message. For external apps to use to validate the user.
+"""
+@auth_bp.route("/authorize", methods=["GET"])
+@jwt_required(locations=["cookies"])
+def authorize():
+    user_id = get_jwt_identity()
+    user = Users.query.get(user_id)
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
+    else: 
+        return jsonify({"msg": "Authorized", "user": user.to_dict()}), 200
+    
 
 """
 The refresh function gets the refresh token from the request cookies and checks if it is valid.

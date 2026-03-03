@@ -13,7 +13,7 @@ class Config:
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "dev-jwt-secret-key-change-in-production")
     JWT_TOKEN_LOCATION = ["cookies"]
     
-    JWT_ACCESS_TOKEN_EXPIRES = timedelta(seconds=30)
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(minutes=15)
     JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
     
     JWT_COOKIE_SECURE = False  # Set to True in production with HTTPS

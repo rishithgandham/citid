@@ -19,6 +19,17 @@ class Users(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "email": self.email,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "app_admin": self.app_admin,
+            "email_verified": self.email_verified,
+        }
+
 
 class RefreshToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)

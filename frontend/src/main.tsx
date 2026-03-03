@@ -26,7 +26,8 @@ createRoot(document.getElementById('root')!).render(
           </Route>
           <Route path="/verify-pending" element={<VerifyPending />} />
 
-          <Route path="/login" element={<Login />} />
+          <Route path="/login"  element={<Login />} />
+          <Route path="/authorize"  element={<Login />} />
           <Route path="/register" element={<Register />} />
         </Routes>
       </AuthProvider>
