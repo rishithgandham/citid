@@ -1,7 +1,7 @@
 from datetime import timedelta
 from flask import Blueprint, current_app, redirect, request, jsonify, make_response, url_for
 from utils.email import send_email
-from models import db, Users, RefreshToken
+from models import db, Users, RefreshToken, Apps, Permissions, UserPermissions
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, set_access_cookies, create_refresh_token, set_refresh_cookies, get_jwt, unset_jwt_cookies, decode_token
 from schemas import validate_register, validate_login
 from jwt import ExpiredSignatureError
@@ -137,7 +137,8 @@ def login():
 
 """
 The authorize function gets the JWT token from the request cookies and checks if the user is authorized.
-If the user is authorized, it returns a success message. For external apps to use to validate the user.
+If the user is authorized, it returns a success message with the user data.
+If a client_id is provided as a query parameter, it also returns the permissions that the user has for that app.
 """
 @auth_bp.route("/authorize", methods=["GET"])
 @jwt_required(locations=["cookies"])
@@ -146,8 +147,49 @@ def authorize():
     user = Users.query.get(user_id)
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
-    else: 
-        return jsonify({"msg": "Authorized", "user": user.to_dict()}), 200
+    else:
+        # Optional client_id query parameter to return app-specific permissions
+        client_id = request.args.get("client_id")
+
+        permissions_data = None
+        if client_id:
+            # Find the app by its public client_id
+            app = Apps.query.filter_by(client_id=client_id).first()
+
+            if not app:
+                return jsonify({"msg": "App not found"}), 404
+
+            # Get all permissions the user has for this app
+            permissions = (
+                db.session.query(Permissions)
+                .join(
+                    UserPermissions,
+                    Permissions.id == UserPermissions.permission_id,
+                )
+                .filter(
+                    UserPermissions.user_id == user.id,
+                    UserPermissions.app_id == app.id,
+                )
+                .all()
+            )
+
+            permissions_data = [
+                {
+                    "id": p.id,
+                    "name": p.name,
+                    "description": p.description,
+                }
+                for p in permissions
+            ]
+
+        response_body = {"msg": "Authorized", "user": user.to_dict()}
+
+        # Only include permissions and client_id if they were requested
+        if client_id:
+            response_body["client_id"] = client_id
+            response_body["permissions"] = permissions_data or []
+
+        return jsonify(response_body), 200
     
 
 """
