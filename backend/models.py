@@ -48,6 +48,7 @@ import secrets
 class Apps(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
+    link = db.Column(db.String(255), nullable=False)
 
     # public identifier used by apps
     client_id = db.Column(db.String(120), unique=True, nullable=False, index=True)
@@ -66,9 +67,13 @@ class Apps(db.Model):
 class Permissions(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 
-    name = db.Column(db.String(120), unique=True, nullable=False)
+    app_id = db.Column(db.Integer, db.ForeignKey("apps.id"), nullable=False)
+
+    name = db.Column(db.String(120), nullable=False)
 
     description = db.Column(db.String(255), nullable=True)
+
+    app = db.relationship("Apps", backref="permissions")
     
     
 class AppRedirectURI(db.Model):

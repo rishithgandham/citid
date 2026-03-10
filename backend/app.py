@@ -4,6 +4,7 @@ from flask_cors import CORS
 from flask_mail import Mail
 from models import db, Users, RefreshToken
 from auth import auth_bp
+from apps import apps_bp
 from config import Config
 
 app = Flask(__name__)
@@ -23,6 +24,11 @@ mail = Mail(app)
 # Blueprint is a way to organize routes into separate files
 app.register_blueprint(auth_bp, url_prefix="/auth")
 
+
+# Register the apps blueprint from apps.py
+app.register_blueprint(apps_bp, url_prefix="/apps")
+
+
 # Dont know what is does, but creates the tables in the db before the first request
 # with app.app_context():
 #     db.drop_all()
@@ -36,7 +42,7 @@ app.register_blueprint(auth_bp, url_prefix="/auth")
 def profile():
     user_id = get_jwt_identity()
     user = Users.query.get(user_id)
-    return jsonify({"email": user.email})
+    return user.to_dict()
 
 if __name__ == "__main__":
     app.run(debug=True)

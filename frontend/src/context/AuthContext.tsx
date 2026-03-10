@@ -6,6 +6,10 @@ import { logout } from "../services/auth";
 
 type AuthContextType = {
   email: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  admin: boolean;
+  id: number | null;
   loading: boolean;
   isAuthenticated: boolean;
   refreshProfile: () => Promise<void>;
@@ -23,7 +27,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
   // Email + other user information
   const [email, setEmail] = useState<string | null>(null);
-
+  const [firstName, setFirstName] = useState<string | null>(null);
+  const [lastName, setLastName] = useState<string | null>(null);
+  const [admin, setAdmin] = useState<boolean>(false);
+  const [id, setId] = useState<number | null>(null);
 
   // Loading state, true until the profile is fetched
   const [loading, setLoading] = useState(true);
@@ -34,7 +41,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const refreshProfile = async () => {
     try {
       const profile = await getProfile();
+
+
+      // Set profile in state
       setEmail(profile.email);
+      setFirstName(profile.first_name);
+      setLastName(profile.last_name);
+      setAdmin(profile.app_admin);
+      setId(profile.id);
+      
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.status === 401) {
         setEmail(null);
@@ -66,6 +81,10 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     <AuthContext.Provider
       value={{
         email,
+        firstName,
+        lastName,
+        admin,
+        id,
         loading,
         isAuthenticated: !!email,
         refreshProfile,

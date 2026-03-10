@@ -1,10 +1,7 @@
 import * as React from "react"
 import {
-  IconChartBar,
   IconDashboard,
   IconFileAi,
-  IconHelp,
-  IconInnerShadowTop,
   IconSettings,
 } from "@tabler/icons-react"
 
@@ -22,7 +19,7 @@ import {
 } from "@/components/ui/sidebar"
 
 import citlogo from '@/assets/images/citlogo.png'
-import { Separator } from "./ui/separator"
+import { Computer } from "lucide-react"
 
 
 
@@ -41,7 +38,7 @@ const data = {
     {
       title: "Apps",
       url: "#",
-      icon: IconFileAi,
+      icon: Computer,
     },
   ],
   navSecondary: [
