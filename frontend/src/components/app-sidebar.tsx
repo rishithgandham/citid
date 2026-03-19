@@ -32,12 +32,12 @@ const data = {
   navMain: [
     {
       title: "Dashboard",
-      url: "#",
+      url: "/",
       icon: IconDashboard,
     },
     {
       title: "Apps",
-      url: "#",
+      url: "/apps",
       icon: Computer,
     },
   ],

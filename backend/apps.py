@@ -1,6 +1,12 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
+from schemas import (
+    validate_create_app,
+    validate_create_permission,
+    validate_grant_permission,
+    validate_revoke_permission,
+)
 from models import db, Users, Apps, Permissions, UserPermissions
 
 
@@ -16,8 +22,12 @@ The current user becomes the owner of the app, and a client_id is generated for 
 def create_app():
     data = request.get_json() or {}
 
-    name = data.get("name")
-    link = data.get("link")
+    validated_data, error_response = validate_create_app(data)
+    if error_response:
+        return error_response
+
+    name = validated_data.get("name")
+    link = validated_data.get("link")
 
     if not name:
         return jsonify({"msg": "App name is required"}), 400
@@ -91,6 +101,28 @@ def get_user_apps():
 
 
 """
+The get_owned_apps route returns all apps where the current user is the owner.
+This is used for the Apps management page.
+"""
+@apps_bp.route("/get_owned_apps", methods=["GET"])
+@jwt_required(locations=["cookies"])
+def get_owned_apps():
+    owner_id = get_jwt_identity()
+
+    apps = Apps.query.filter_by(owner_id=owner_id).all()
+
+    result = [
+        {
+            "name": app.name,
+            "link": app.link,
+        }
+        for app in apps
+    ]
+
+    return jsonify({"apps": result}), 200
+
+
+"""
 The create_permission function allows creating a new permission that is tied
 to a specific app. Each app can define its own permission names.
 """
@@ -99,15 +131,21 @@ to a specific app. Each app can define its own permission names.
 def create_permission(app_id):
     data = request.get_json() or {}
 
-    name = data.get("name")
-    description = data.get("description")
+    validated_data, error_response = validate_create_permission(data)
+    if error_response:
+        return error_response
 
-    if not name:
-        return jsonify({"msg": "Permission name is required"}), 400
+    name = validated_data.get("name")
+    description = validated_data.get("description")
 
     app = Apps.query.get(app_id)
     if not app:
         return jsonify({"msg": "App not found"}), 404
+    
+    # Only the app owner can manage permissions for their app
+    jwt_user_id = get_jwt_identity()
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
 
     # Ensure permission name is unique per app
     if Permissions.query.filter_by(name=name, app_id=app.id).first():
@@ -141,16 +179,22 @@ It creates a UserPermissions record linking the user, app, and permission togeth
 def grant_permission(app_id):
     data = request.get_json() or {}
 
-    user_id = data.get("user_id")
-    permission_id = data.get("permission_id")
+    validated_data, error_response = validate_grant_permission(data)
+    if error_response:
+        return error_response
 
-    if not user_id or not permission_id:
-        return jsonify({"msg": "user_id and permission_id are required"}), 400
+    user_id = validated_data.get("user_id")
+    permission_id = validated_data.get("permission_id")
 
     # Validate referenced records
     app = Apps.query.get(app_id)
     if not app:
         return jsonify({"msg": "App not found"}), 404
+    
+    # Only the app owner can grant permissions for their app
+    jwt_user_id = get_jwt_identity()
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
 
     user = Users.query.get(user_id)
     if not user:
@@ -198,15 +242,21 @@ It deletes the corresponding UserPermissions record if it exists.
 def revoke_permission(app_id):
     data = request.get_json() or {}
 
-    user_id = data.get("user_id")
-    permission_id = data.get("permission_id")
+    validated_data, error_response = validate_revoke_permission(data)
+    if error_response:
+        return error_response
 
-    if not user_id or not permission_id:
-        return jsonify({"msg": "user_id and permission_id are required"}), 400
+    user_id = validated_data.get("user_id")
+    permission_id = validated_data.get("permission_id")
 
     app = Apps.query.get(app_id)
     if not app:
         return jsonify({"msg": "App not found"}), 404
+    
+    # Only the app owner can revoke permissions for their app
+    jwt_user_id = get_jwt_identity()
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
 
     user_permission = UserPermissions.query.filter_by(
         user_id=user_id, app_id=app_id, permission_id=permission_id

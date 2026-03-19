@@ -44,9 +44,7 @@ def profile():
     user = Users.query.get(user_id)
     return user.to_dict()
 
-if __name__ == "__main__":
-    app.run(debug=True)
-    
+
     
 """
 The check_if_token_revoked function checks if the refresh token is revoked.
@@ -58,3 +56,8 @@ def check_if_token_revoked(jwt_header, jwt_payload):
     token = RefreshToken.query.filter_by(jti=jti).first()
     return token is not None and token.revoked
 
+
+
+if __name__ == "__main__":
+    app.run(debug=True)
+    
