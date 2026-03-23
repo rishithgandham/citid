@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, type FormEvent } from "react"
 
 import { useProtectedRoute } from "@/context/AuthContext"
 import { createApp, getOwnedApps } from "@/services/apps"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Link } from "react-router-dom"
 import {
   Dialog,
   DialogContent,
@@ -33,11 +34,11 @@ function Apps() {
 
   if (loading) return <div>Loading...</div>
 
-  const handleSubmitCreateApp = async (e: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmitCreateApp = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     if (!name) return
     const result = await createApp(name, link)
-    const created = { name: result.app.name, link: result.app.link }
+    const created = { id: result.app.id, name: result.app.name, link: result.app.link }
     setApps((prev) => [...prev, created])
     setCreatedClientId(result.app.client_id)
     setShowClientDialog(true)
@@ -72,8 +73,12 @@ function Apps() {
           </TableHeader>
           <TableBody>
             {apps.map((item, index) => (
-              <TableRow key={index}>
-                <TableCell>{item.name}</TableCell>
+              <TableRow key={item.id ?? index}>
+                <TableCell>
+                  <Link to={`/apps/${item.id}`} className="hover:underline">
+                    {item.name}
+                  </Link>
+                </TableCell>
                 <TableCell>{item.link}</TableCell>
               </TableRow>
             ))}
@@ -119,7 +124,7 @@ function CreateAppDialog({
   link: string
   setName: (value: string) => void
   setLink: (value: string) => void
-  handleSubmit: (e: React.FormEvent<HTMLFormElement>) => void
+  handleSubmit: (e: FormEvent<HTMLFormElement>) => void
 }) {
   return (
     <Dialog>

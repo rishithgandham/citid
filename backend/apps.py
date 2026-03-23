@@ -1,13 +1,17 @@
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
+from sqlalchemy import func
+
 from schemas import (
     validate_create_app,
     validate_create_permission,
     validate_grant_permission,
+    validate_grant_permission_by_emails,
     validate_revoke_permission,
+    validate_update_app,
 )
-from models import db, Users, Apps, Permissions, UserPermissions
+from models import db, Users, Apps, Permissions, UserPermissions, AppRedirectURI
 
 
 apps_bp = Blueprint("apps", __name__)
@@ -113,6 +117,7 @@ def get_owned_apps():
 
     result = [
         {
+            "id": app.id,
             "name": app.name,
             "link": app.link,
         }
@@ -122,11 +127,164 @@ def get_owned_apps():
     return jsonify({"apps": result}), 200
 
 
+@apps_bp.route("/<int:app_id>", methods=["GET"])
+@jwt_required(locations=["cookies"])
+def get_owned_app(app_id):
+    jwt_user_id = get_jwt_identity()
+    app = Apps.query.get(app_id)
+    if not app:
+        return jsonify({"msg": "App not found"}), 404
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
+
+    return jsonify({"app": {"id": app.id, "name": app.name, "link": app.link}}), 200
+
+
+@apps_bp.route("/<int:app_id>", methods=["PUT"])
+@jwt_required(locations=["cookies"])
+def update_owned_app(app_id):
+    jwt_user_id = get_jwt_identity()
+
+    app = Apps.query.get(app_id)
+    if not app:
+        return jsonify({"msg": "App not found"}), 404
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
+
+    data = request.get_json() or {}
+    validated_data, error_response = validate_update_app(data)
+    if error_response:
+        return error_response
+
+    app.name = validated_data["name"]
+    # Allow leaving link unchanged by omitting it
+    if "link" in validated_data:
+        app.link = validated_data.get("link")
+
+    db.session.commit()
+
+    return (
+        jsonify({"msg": "App updated successfully", "app": {"id": app.id, "name": app.name, "link": app.link}}),
+        200,
+    )
+
+
+@apps_bp.route("/<int:app_id>/client_id", methods=["GET"])
+@jwt_required(locations=["cookies"])
+def get_owned_client_id(app_id):
+    jwt_user_id = get_jwt_identity()
+    app = Apps.query.get(app_id)
+    if not app:
+        return jsonify({"msg": "App not found"}), 404
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
+
+    return jsonify({"client_id": app.client_id}), 200
+
+
+@apps_bp.route("/<int:app_id>", methods=["DELETE"])
+@jwt_required(locations=["cookies"])
+def delete_owned_app(app_id):
+    jwt_user_id = get_jwt_identity()
+    app = Apps.query.get(app_id)
+    if not app:
+        return jsonify({"msg": "App not found"}), 404
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
+
+    # Permissions are tied to apps, so remove related grant records + permissions first.
+    app_permissions = Permissions.query.filter_by(app_id=app_id).all()
+    permission_ids = [p.id for p in app_permissions]
+
+    if permission_ids:
+        UserPermissions.query.filter(UserPermissions.permission_id.in_(permission_ids)).delete(
+            synchronize_session=False
+        )
+    Permissions.query.filter_by(app_id=app_id).delete(synchronize_session=False)
+    AppRedirectURI.query.filter_by(app_id=app_id).delete(synchronize_session=False)
+
+    db.session.delete(app)
+    db.session.commit()
+
+    return jsonify({"msg": "App deleted successfully"}), 200
+
+
+"""
+List permissions defined for an app (owner only).
+"""
+@apps_bp.route("/<int:app_id>/permissions", methods=["GET"])
+@jwt_required(locations=["cookies"])
+def list_owned_app_permissions(app_id):
+    jwt_user_id = get_jwt_identity()
+    app = Apps.query.get(app_id)
+    if not app:
+        return jsonify({"msg": "App not found"}), 404
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
+
+    rows = (
+        Permissions.query.filter_by(app_id=app_id)
+        .order_by(Permissions.name)
+        .all()
+    )
+    return (
+        jsonify(
+            {
+                "permissions": [
+                    {"id": p.id, "name": p.name, "description": p.description}
+                    for p in rows
+                ]
+            }
+        ),
+        200,
+    )
+
+
+@apps_bp.route("/<int:app_id>/permissions/grants", methods=["GET"])
+@jwt_required(locations=["cookies"])
+def list_owned_app_permission_grants(app_id):
+    """
+    All users who have at least one permission on this app, with the list of
+    permission names per user. Owner only.
+    """
+    jwt_user_id = get_jwt_identity()
+    app = Apps.query.get(app_id)
+    if not app:
+        return jsonify({"msg": "App not found"}), 404
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
+
+    rows = (
+        db.session.query(Users, Permissions)
+        .join(UserPermissions, UserPermissions.user_id == Users.id)
+        .join(Permissions, Permissions.id == UserPermissions.permission_id)
+        .filter(UserPermissions.app_id == app_id)
+        .order_by(Users.email, Permissions.name)
+        .all()
+    )
+
+    grouped = {}
+    for user, perm in rows:
+        if user.id not in grouped:
+            grouped[user.id] = {
+                "user_id": user.id,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "permissions": [],
+            }
+        grouped[user.id]["permissions"].append(
+            {"id": perm.id, "name": perm.name}
+        )
+
+    return jsonify({"users": list(grouped.values())}), 200
+
+
 """
 The create_permission function allows creating a new permission that is tied
 to a specific app. Each app can define its own permission names.
 """
-@apps_bp.route("/apps/<int:app_id>/permissions", methods=["POST"])
+@apps_bp.route("/<int:app_id>/permissions", methods=["POST"])
 @jwt_required(locations=["cookies"])
 def create_permission(app_id):
     data = request.get_json() or {}
@@ -174,7 +332,7 @@ def create_permission(app_id):
 The grant_permission function assigns a permission to a user for a specific app.
 It creates a UserPermissions record linking the user, app, and permission together.
 """
-@apps_bp.route("/apps/<int:app_id>/permissions/grant", methods=["POST"])
+@apps_bp.route("/<int:app_id>/permissions/grant", methods=["POST"])
 @jwt_required(locations=["cookies"])
 def grant_permission(app_id):
     data = request.get_json() or {}
@@ -233,11 +391,79 @@ def grant_permission(app_id):
     )
 
 
+@apps_bp.route("/<int:app_id>/permissions/grant_by_emails", methods=["POST"])
+@jwt_required(locations=["cookies"])
+def grant_permission_by_emails(app_id):
+    """Grant a permission to one or more users identified by email (owner only)."""
+    data = request.get_json() or {}
+
+    validated_data, error_response = validate_grant_permission_by_emails(data)
+    if error_response:
+        return error_response
+
+    permission_id = validated_data["permission_id"]
+    email_list = validated_data["email_list"]
+
+    app = Apps.query.get(app_id)
+    if not app:
+        return jsonify({"msg": "App not found"}), 404
+
+    jwt_user_id = get_jwt_identity()
+    if app.owner_id != jwt_user_id:
+        return jsonify({"msg": "Forbidden"}), 403
+
+    permission = Permissions.query.get(permission_id)
+    if not permission or permission.app_id != app.id:
+        return jsonify({"msg": "Permission not found for this app"}), 404
+
+    seen = set()
+    unique_emails = []
+    for e in email_list:
+        if e not in seen:
+            seen.add(e)
+            unique_emails.append(e)
+
+    granted = []
+    not_found = []
+    already_granted = []
+
+    for email in unique_emails:
+        user = Users.query.filter(func.lower(Users.email) == email).first()
+        if not user:
+            not_found.append(email)
+            continue
+        existing = UserPermissions.query.filter_by(
+            user_id=user.id, app_id=app.id, permission_id=permission.id
+        ).first()
+        if existing:
+            already_granted.append({"email": user.email, "user_id": user.id})
+            continue
+        user_permission = UserPermissions(
+            user_id=user.id, app_id=app.id, permission_id=permission.id
+        )
+        db.session.add(user_permission)
+        granted.append({"email": user.email, "user_id": user.id})
+
+    db.session.commit()
+
+    return (
+        jsonify(
+            {
+                "msg": "Permission grants processed",
+                "granted": granted,
+                "not_found": not_found,
+                "already_granted": already_granted,
+            }
+        ),
+        200,
+    )
+
+
 """
 The revoke_permission function removes a permission from a user for a specific app.
 It deletes the corresponding UserPermissions record if it exists.
 """
-@apps_bp.route("/apps/<int:app_id>/permissions/revoke", methods=["DELETE"])
+@apps_bp.route("/<int:app_id>/permissions/revoke", methods=["DELETE"])
 @jwt_required(locations=["cookies"])
 def revoke_permission(app_id):
     data = request.get_json() or {}

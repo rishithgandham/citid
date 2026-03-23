@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 function Dashboard() {
 
     const [accessibleApps, setAccessibleApps] = useState<any[]>([]);
-    const { email, firstName, lastName, loading, logoutUser } = useProtectedRoute();
+    const { firstName, lastName, loading } = useProtectedRoute();
 
     useEffect(() => {
         const fetchAccessibleApps = async () => {
@@ -50,11 +50,11 @@ function AccessibleApps({ accessibleApps }: { accessibleApps: any[] }) {
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {accessibleApps.map((app) => (
-                        <TableRow key={app.id}>
-                            <TableCell>{app.name}</TableCell>
-                            <TableCell>{app.permission}</TableCell>
-                            <TableCell>{app.link}</TableCell>
+                    {accessibleApps.map((item, index) => (
+                        <TableRow key={`${item.app}-${item.permission}-${index}`}>
+                            <TableCell>{item.app}</TableCell>
+                            <TableCell>{item.permission}</TableCell>
+                            <TableCell>{item.link}</TableCell>
                         </TableRow>
                     ))}
                 </TableBody>

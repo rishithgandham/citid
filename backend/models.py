@@ -48,7 +48,7 @@ import secrets
 class Apps(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(120), nullable=False)
-    link = db.Column(db.String(255), nullable=False)
+    link = db.Column(db.String(255), nullable=True)
 
     # public identifier used by apps
     client_id = db.Column(db.String(120), unique=True, nullable=False, index=True)

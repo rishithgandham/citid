@@ -1,7 +1,6 @@
 import * as React from "react"
 import {
   IconDashboard,
-  IconFileAi,
   IconSettings,
 } from "@tabler/icons-react"
 
@@ -20,6 +19,7 @@ import {
 
 import citlogo from '@/assets/images/citlogo.png'
 import { Computer } from "lucide-react"
+import { useAuth } from "@/context/AuthContext"
 
 
 
@@ -51,6 +51,9 @@ const data = {
 }
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+
+  const { logoutUser, email, firstName, lastName } = useAuth();
+
   return (
     <Sidebar  collapsible="offcanvas" {...props}>
       <SidebarHeader>
@@ -74,7 +77,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         <NavSecondary items={data.navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
-        <NavUser user={data.user} />
+        <NavUser  user={{ name: `${firstName} ${lastName}`, email: email!, avatar: "/avatars/shadcn.jpg" }} logoutUser={logoutUser} />
       </SidebarFooter>
     </Sidebar>
   )

@@ -175,7 +175,6 @@ def authorize():
 
             permissions_data = [
                 {
-                    "id": p.id,
                     "name": p.name,
                     "description": p.description,
                 }
@@ -225,7 +224,7 @@ The logout function gets the JWT token from the request cookies and revokes the 
 If the refresh token is valid and not revoked, it revokes it and returns a success message.
 """
 @auth_bp.route("/logout", methods=["POST"])
-@jwt_required(locations=["cookies"])
+@jwt_required(locations=["cookies"], refresh=True, verify_type=True)
 def logout():
     # Get the JWT token and user ID from the request cookies
     jti = get_jwt()["jti"]
