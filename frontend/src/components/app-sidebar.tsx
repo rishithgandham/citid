@@ -1,7 +1,8 @@
-import * as React from "react"
+import { useMemo, type ComponentProps } from "react"
 import {
   IconDashboard,
   IconSettings,
+  IconUsers,
 } from "@tabler/icons-react"
 
 import { NavMain } from "@/components/nav-main"
@@ -21,38 +22,40 @@ import citlogo from '@/assets/images/citlogo.png'
 import { Computer } from "lucide-react"
 import { useAuth } from "@/context/AuthContext"
 
-
-
-const data = {
-  user: {
-    name: "Rishith Gandham",
-    email: "rishith@citid.com",
-    avatar: "/avatars/shadcn.jpg",
+const navSecondary = [
+  {
+    title: "Settings",
+    url: "#",
+    icon: IconSettings,
   },
-  navMain: [
-    {
-      title: "Dashboard",
-      url: "/",
-      icon: IconDashboard,
-    },
-    {
-      title: "Apps",
-      url: "/apps",
-      icon: Computer,
-    },
-  ],
-  navSecondary: [
-    {
-      title: "Settings",
-      url: "#",
-      icon: IconSettings,
-    },
-  ],
-}
+]
 
-export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+export function AppSidebar({ ...props }: ComponentProps<typeof Sidebar>) {
 
-  const { logoutUser, email, firstName, lastName } = useAuth();
+  const { logoutUser, email, firstName, lastName, admin } = useAuth()
+
+  const navMain = useMemo(() => {
+    const items = [
+      {
+        title: "Dashboard",
+        url: "/",
+        icon: IconDashboard,
+      },
+      {
+        title: "Apps",
+        url: "/apps",
+        icon: Computer,
+      },
+    ]
+    if (admin) {
+      items.push({
+        title: "User management",
+        url: "/user-management",
+        icon: IconUsers,
+      })
+    }
+    return items
+  }, [admin])
 
   return (
     <Sidebar  collapsible="offcanvas" {...props}>
@@ -73,8 +76,8 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         </SidebarMenu>
       </SidebarHeader>
       <SidebarContent>
-        <NavMain items={data.navMain} />
-        <NavSecondary items={data.navSecondary} className="mt-auto" />
+        <NavMain items={navMain} />
+        <NavSecondary items={navSecondary} className="mt-auto" />
       </SidebarContent>
       <SidebarFooter>
         <NavUser  user={{ name: `${firstName} ${lastName}`, email: email!, avatar: "/avatars/shadcn.jpg" }} logoutUser={logoutUser} />

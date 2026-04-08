@@ -5,6 +5,7 @@ from flask_mail import Mail
 from models import db, Users, RefreshToken
 from auth import auth_bp
 from apps import apps_bp
+from admin_views import admin_bp
 from config import Config
 
 app = Flask(__name__)
@@ -28,6 +29,9 @@ app.register_blueprint(auth_bp, url_prefix="/auth")
 # Register the apps blueprint from apps.py
 app.register_blueprint(apps_bp, url_prefix="/apps")
 
+# Platform administrator user management
+app.register_blueprint(admin_bp, url_prefix="/admin")
+
 
 # Dont know what is does, but creates the tables in the db before the first request
 # with app.app_context():
@@ -40,7 +44,7 @@ app.register_blueprint(apps_bp, url_prefix="/apps")
 @app.route("/profile")
 @jwt_required(locations=["cookies"])
 def profile():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = Users.query.get(user_id)
     return user.to_dict()
 

@@ -4,7 +4,7 @@ import { useParams } from "react-router-dom"
 import { AppAccessEditModal } from "@/components/app-access/AppAccessEditModal"
 import { AppAccessGrantToUsers } from "@/components/app-access/AppAccessGrantToUsers"
 import { AppAccessPermissions } from "@/components/app-access/AppAccessPermissions"
-import { AppAccessUserGrantsTable } from "@/components/app-access/AppAccessUserGrantsTable"
+import { AppAccessUsersPermissionTable } from "@/components/app-access/AppAccessUsersPermissionTable"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -19,20 +19,22 @@ import { useProtectedRoute } from "@/context/AuthContext"
 import {
   createOwnedAppPermission,
   deleteOwnedApp,
+  getAdminUserOptions,
   getOwnedApp,
   getOwnedAppClientId,
   getOwnedAppPermissionGrants,
   getOwnedAppPermissions,
   grantOwnedAppPermissionByEmails,
   updateOwnedApp,
+  type AdminUserOption,
   type GrantByEmailsResult,
   type OwnedAppPermission,
   type OwnedAppUserGrant,
 } from "@/services/apps"
 
 /**
- * Owner-only page for a single SSO app: edit metadata (modal), define permissions,
- * grant permissions by email, reveal client_id, or delete the app.
+ * Page for a single SSO app: permissions, grants, and client_id for owners/admins;
+ * edit metadata and delete are restricted to platform administrators only.
  */
 function AppAccess() {
   const { appId } = useParams()
@@ -43,11 +45,13 @@ function AppAccess() {
     return Number.isFinite(n) ? n : null
   }, [appId])
 
-  const { loading } = useProtectedRoute()
+  const { loading, admin } = useProtectedRoute()
 
   /** App fields mirrored from GET /apps/:id (also edited in the modal) */
   const [appName, setAppName] = useState("")
   const [appLink, setAppLink] = useState("")
+  const [appOwnerId, setAppOwnerId] = useState<number | null>(null)
+  const [adminUsers, setAdminUsers] = useState<AdminUserOption[]>([])
   const [appLoading, setAppLoading] = useState(true)
 
   /** Shared error line for API failures (load, save, permissions, grant, client_id, delete) */
@@ -86,6 +90,8 @@ function AppAccess() {
         const response = await getOwnedApp(numericAppId)
         setAppName(response.app?.name ?? "")
         setAppLink(response.app?.link ?? "")
+        const oid = response.app?.owner_id
+        setAppOwnerId(typeof oid === "number" ? oid : null)
         try {
           const permRes = await getOwnedAppPermissions(numericAppId)
           setPermissions(permRes.permissions ?? [])
@@ -115,6 +121,19 @@ function AppAccess() {
     }
   }, [numericAppId, loading])
 
+  useEffect(() => {
+    if (!admin) return
+    const load = async () => {
+      try {
+        const res = await getAdminUserOptions()
+        setAdminUsers(res.users ?? [])
+      } catch {
+        setAdminUsers([])
+      }
+    }
+    load()
+  }, [admin])
+
   if (loading || appLoading) return <div>Loading...</div>
 
   /** Persist app name + link from the edit modal */
@@ -124,7 +143,17 @@ function AppAccess() {
     setActionError(null)
     setEditSaving(true)
     try {
-      await updateOwnedApp(numericAppId, { name: appName, link: appLink || null })
+      const payload: {
+        name: string
+        link: string | null
+        owner_id?: number
+      } = { name: appName, link: appLink || null }
+      if (admin && appOwnerId != null) {
+        payload.owner_id = appOwnerId
+      }
+      const data = await updateOwnedApp(numericAppId, payload)
+      const nextOwner = data.app?.owner_id
+      if (typeof nextOwner === "number") setAppOwnerId(nextOwner)
       setEditModalOpen(false)
     } catch (err: any) {
       setActionError(err?.response?.data?.msg ?? "Failed to save app")
@@ -206,6 +235,16 @@ function AppAccess() {
     }
   }
 
+  const refreshGrantUsers = async () => {
+    if (numericAppId === null) return
+    try {
+      const grantsRes = await getOwnedAppPermissionGrants(numericAppId)
+      setGrantUsers(grantsRes.users ?? [])
+    } catch {
+      /* keep existing rows */
+    }
+  }
+
   const handleRevealClientId = async () => {
     if (numericAppId === null) return
     setClientLoading(true)
@@ -234,9 +273,11 @@ function AppAccess() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-          <Button type="button" variant="secondary" onClick={() => setEditModalOpen(true)}>
-            Edit app
-          </Button>
+          {admin ? (
+            <Button type="button" variant="secondary" onClick={() => setEditModalOpen(true)}>
+              Edit app
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="outline"
@@ -245,9 +286,11 @@ function AppAccess() {
           >
             {clientLoading ? "Loading..." : "Reveal client_id"}
           </Button>
-          <Button type="button" variant="destructive" onClick={handleDelete}>
-            Delete app
-          </Button>
+          {admin ? (
+            <Button type="button" variant="destructive" onClick={handleDelete}>
+              Delete app
+            </Button>
+          ) : null}
         </div>
       </div>
 
@@ -295,12 +338,21 @@ function AppAccess() {
       </div>
 
       <Separator className="mt-12" />
-      <section className="mt-10 max-w-4xl">
+      <section className="mt-10 max-w-6xl">
         <h2 className="text-lg font-semibold">Users with access</h2>
         <p className="text-muted-foreground text-sm mt-1 mb-4">
-          Everyone who has been granted at least one permission for this app.
+          All accounts in CitID. Select users and assign a permission in bulk, or use the email
+          tool above. The table sorts by access first by default (anyone with a permission appears
+          above users with none); click column headers to change sort.
         </p>
-        <AppAccessUserGrantsTable users={grantUsers} />
+        {numericAppId !== null ? (
+          <AppAccessUsersPermissionTable
+            appId={numericAppId}
+            permissions={permissions}
+            grantUsers={grantUsers}
+            onGrantsUpdated={refreshGrantUsers}
+          />
+        ) : null}
       </section>
 
       <AppAccessEditModal
@@ -312,6 +364,10 @@ function AppAccess() {
         onLinkChange={setAppLink}
         onSave={handleSaveApp}
         isSaving={editSaving}
+        showOwnerField={admin}
+        ownerId={appOwnerId}
+        adminUsers={adminUsers}
+        onOwnerIdChange={setAppOwnerId}
       />
 
       <Dialog open={clientDialogOpen} onOpenChange={setClientDialogOpen}>

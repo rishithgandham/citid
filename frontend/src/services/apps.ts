@@ -17,10 +17,37 @@ export const getOwnedApps = async () => {
   return response.data
 }
 
-// Create a new app owned by the current user.
+// Create a new app (platform admins only). Optional owner_id assigns another user as owner.
 // Backend: POST /apps/create_app
-export const createApp = async (name: string, link: string) => {
-  const response = await api.post(`/apps/create_app`, { name, link })
+export const createApp = async (
+  name: string,
+  link: string,
+  options?: { owner_id?: number; redirect_uris?: string[] }
+) => {
+  const body: {
+    name: string
+    link: string
+    owner_id?: number
+    redirect_uris?: string[]
+  } = { name, link }
+  if (options?.owner_id != null) body.owner_id = options.owner_id
+  if (options?.redirect_uris != null && options.redirect_uris.length > 0) {
+    body.redirect_uris = options.redirect_uris
+  }
+  const response = await api.post(`/apps/create_app`, body)
+  return response.data
+}
+
+export type AdminUserOption = {
+  id: number
+  email: string
+  first_name: string
+  last_name: string
+}
+
+// Platform admins: list users for assigning app ownership. Backend: GET /apps/admin/users
+export const getAdminUserOptions = async () => {
+  const response = await api.get<{ users: AdminUserOption[] }>(`/apps/admin/users`)
   return response.data
 }
 
@@ -31,11 +58,11 @@ export const getOwnedApp = async (appId: number) => {
   return response.data
 }
 
-// Update an app owned by the current user
+// Update app metadata (platform administrators only). Optional owner_id changes the owner.
 // Backend: PUT /apps/<app_id>
 export const updateOwnedApp = async (
   appId: number,
-  payload: { name: string; link?: string | null }
+  payload: { name: string; link?: string | null; owner_id?: number }
 ) => {
   const response = await api.put(`/apps/${appId}`, payload)
   return response.data
@@ -117,6 +144,33 @@ export type OwnedAppUserGrant = {
 export const getOwnedAppPermissionGrants = async (appId: number) => {
   const response = await api.get<{ users: OwnedAppUserGrant[] }>(
     `/apps/${appId}/permissions/grants`
+  )
+  return response.data
+}
+
+/** All users (directory picker). Owner or platform admin. GET /apps/:id/users/directory */
+export const getAppUserDirectory = async (appId: number) => {
+  const response = await api.get<{ users: AdminUserOption[] }>(
+    `/apps/${appId}/users/directory`
+  )
+  return response.data
+}
+
+export type GrantBulkResult = {
+  msg: string
+  granted: { user_id: number; email: string }[]
+  not_found: number[]
+  already_granted: { user_id: number; email: string }[]
+}
+
+/** Grant one permission to many users by id. POST /apps/:id/permissions/grant_bulk */
+export const grantOwnedAppPermissionBulk = async (
+  appId: number,
+  payload: { permission_id: number; user_ids: number[] }
+) => {
+  const response = await api.post<GrantBulkResult>(
+    `/apps/${appId}/permissions/grant_bulk`,
+    payload
   )
   return response.data
 }

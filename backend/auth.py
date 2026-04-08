@@ -38,7 +38,7 @@ def register():
     db.session.commit() 
     
     # Send verification email
-    verification_token = create_access_token(identity=user.id, additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
+    verification_token = create_access_token(identity=str(user.id), additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
     send_email(email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
     
     
@@ -55,7 +55,7 @@ If the email is verified, it creates the auth tokens and returns it.
 def verify_email(token):
     try: 
         decoded_token = decode_token(token)
-        user_id = decoded_token["sub"]
+        user_id = int(decoded_token["sub"])
         user = Users.query.get(user_id)
         if user:
             # Set email verified to True
@@ -66,7 +66,7 @@ def verify_email(token):
             return jsonify({"msg": "Invalid verification token"}), 400
     except ExpiredSignatureError as e:
         return jsonify({"msg": "Verification token expired"}), 400
-    except Exception as e:
+    except Exception:
         return jsonify({"msg": "Invalid verification token"}), 400
 
 
@@ -89,7 +89,7 @@ def resend_verification_email():
     if user:
         if user.email_verified:
             return jsonify({"msg": "Email already verified"}), 400
-        verification_token = create_access_token(identity=user.id, additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
+        verification_token = create_access_token(identity=str(user.id), additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
         send_email(email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
         
     return jsonify({"msg": "If that email exists, a verification link was sent to it."}), 404
@@ -113,13 +113,13 @@ def login():
         return jsonify({"msg": "Bad credentials"}), 401
     
     if not user.email_verified:
-        verification_token = create_access_token(identity=user.id, additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
+        verification_token = create_access_token(identity=str(user.id), additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
         send_email(user.email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
         return jsonify({"msg": "Email not verified, a verification link was sent to your email"}), 403
     
     # Create JWT token and set it as HTTP cookie
-    access_token = create_access_token(identity=user.id)
-    refresh_token = create_refresh_token(identity=user.id)
+    access_token = create_access_token(identity=str(user.id))
+    refresh_token = create_refresh_token(identity=str(user.id))
     
     # Store refresh token in database
     # Decode the refresh token to get its JTI
@@ -143,7 +143,7 @@ If a client_id is provided as a query parameter, it also returns the permissions
 @auth_bp.route("/authorize", methods=["GET"])
 @jwt_required(locations=["cookies"])
 def authorize():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     user = Users.query.get(user_id)
     if not user:
         return jsonify({"msg": "Unauthorized"}), 401
@@ -200,7 +200,7 @@ If it is valid, it creates a new access token and returns it.
 def refresh():
     # Get the JWT token and user ID from the request cookies
     jti = get_jwt()["jti"]
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     
     # Check if the refresh token is valid and not revoked
     token = RefreshToken.query.filter_by(jti=jti, user_id=user_id).first()
@@ -211,7 +211,7 @@ def refresh():
         
     
     # Create a new access token
-    access_token = create_access_token(identity=user_id)
+    access_token = create_access_token(identity=str(user_id))
     
     # Return response with new access token
     response = make_response(jsonify({"msg": "Token refreshed"}), 200)

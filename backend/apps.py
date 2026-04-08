@@ -7,6 +7,7 @@ from schemas import (
     validate_create_app,
     validate_create_permission,
     validate_grant_permission,
+    validate_grant_permission_bulk,
     validate_grant_permission_by_emails,
     validate_revoke_permission,
     validate_update_app,
@@ -17,9 +18,25 @@ from models import db, Users, Apps, Permissions, UserPermissions, AppRedirectURI
 apps_bp = Blueprint("apps", __name__)
 
 
+def _request_user():
+    uid = int(get_jwt_identity())
+    return Users.query.get(uid)
+
+
+def _is_platform_admin(user):
+    """CIT ID platform operator (Users.app_admin), not per-SSO-app permissions."""
+    return user is not None and bool(user.app_admin)
+
+
+def _can_manage_app(user, app):
+    if not user or not app:
+        return False
+    return user.app_admin or app.owner_id == user.id
+
+
 """
-The create_app function allows an authenticated user to create a new external app (SSO app).
-The current user becomes the owner of the app, and a client_id is generated for the app.
+The create_app function allows a platform admin (Users.app_admin) to create a new external app (SSO app).
+They may set owner_id to assign another user as owner; otherwise the new app is owned by the admin.
 """
 @apps_bp.route("/create_app", methods=["POST"])
 @jwt_required(locations=["cookies"])
@@ -30,17 +47,24 @@ def create_app():
     if error_response:
         return error_response
 
+    current_user = _request_user()
+    if not current_user:
+        return jsonify({"msg": "User not found"}), 404
+    if not _is_platform_admin(current_user):
+        return jsonify({"msg": "Forbidden: only platform administrators can create apps"}), 403
+
     name = validated_data.get("name")
     link = validated_data.get("link")
+    requested_owner_id = validated_data.get("owner_id")
 
     if not name:
         return jsonify({"msg": "App name is required"}), 400
 
-    # Get the current authenticated user as the app owner
-    owner_id = get_jwt_identity()
-    owner = Users.query.get(owner_id)
-    if not owner:
-        return jsonify({"msg": "Owner not found"}), 404
+    owner = current_user
+    if requested_owner_id is not None:
+        candidate = Users.query.get(requested_owner_id)
+        if candidate is not None:
+            owner = candidate
 
     # Create the app and generate its client credentials
     app = Apps(name=name, owner_id=owner.id, link=link)
@@ -76,7 +100,7 @@ It does NOT expose any internal identifiers (ids, client_id, owner_id), only:
 @apps_bp.route("/get_user_apps", methods=["GET"])
 @jwt_required(locations=["cookies"])
 def get_user_apps():
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
 
     # Ensure the user exists
     user = Users.query.get(user_id)
@@ -111,45 +135,105 @@ This is used for the Apps management page.
 @apps_bp.route("/get_owned_apps", methods=["GET"])
 @jwt_required(locations=["cookies"])
 def get_owned_apps():
-    owner_id = get_jwt_identity()
+    user = _request_user()
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
 
-    apps = Apps.query.filter_by(owner_id=owner_id).all()
-
-    result = [
-        {
-            "id": app.id,
-            "name": app.name,
-            "link": app.link,
-        }
-        for app in apps
-    ]
+    if _is_platform_admin(user):
+        apps = Apps.query.order_by(Apps.name).all()
+        result = []
+        for app in apps:
+            row = {
+                "id": app.id,
+                "name": app.name,
+                "link": app.link,
+            }
+            if app.owner:
+                row["owner"] = {
+                    "id": app.owner.id,
+                    "email": app.owner.email,
+                    "first_name": app.owner.first_name,
+                    "last_name": app.owner.last_name,
+                }
+            result.append(row)
+    else:
+        apps = Apps.query.filter_by(owner_id=user.id).all()
+        result = [
+            {
+                "id": app.id,
+                "name": app.name,
+                "link": app.link,
+            }
+            for app in apps
+        ]
 
     return jsonify({"apps": result}), 200
+
+
+@apps_bp.route("/admin/users", methods=["GET"])
+@jwt_required(locations=["cookies"])
+def list_users_for_admin():
+    user = _request_user()
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+    if not _is_platform_admin(user):
+        return jsonify({"msg": "Forbidden"}), 403
+
+    users = Users.query.order_by(Users.email).all()
+    return (
+        jsonify(
+            {
+                "users": [
+                    {
+                        "id": u.id,
+                        "email": u.email,
+                        "first_name": u.first_name,
+                        "last_name": u.last_name,
+                    }
+                    for u in users
+                ]
+            }
+        ),
+        200,
+    )
 
 
 @apps_bp.route("/<int:app_id>", methods=["GET"])
 @jwt_required(locations=["cookies"])
 def get_owned_app(app_id):
-    jwt_user_id = get_jwt_identity()
+    jwt_user = _request_user()
     app = Apps.query.get(app_id)
     if not app:
         return jsonify({"msg": "App not found"}), 404
-    if app.owner_id != jwt_user_id:
+    if not _can_manage_app(jwt_user, app):
         return jsonify({"msg": "Forbidden"}), 403
 
-    return jsonify({"app": {"id": app.id, "name": app.name, "link": app.link}}), 200
+    app_payload = {
+        "id": app.id,
+        "name": app.name,
+        "link": app.link,
+        "owner_id": app.owner_id,
+    }
+    if app.owner:
+        app_payload["owner"] = {
+            "id": app.owner.id,
+            "email": app.owner.email,
+            "first_name": app.owner.first_name,
+            "last_name": app.owner.last_name,
+        }
+    return jsonify({"app": app_payload}), 200
 
 
 @apps_bp.route("/<int:app_id>", methods=["PUT"])
 @jwt_required(locations=["cookies"])
 def update_owned_app(app_id):
-    jwt_user_id = get_jwt_identity()
+    jwt_user = _request_user()
 
     app = Apps.query.get(app_id)
     if not app:
         return jsonify({"msg": "App not found"}), 404
-    if app.owner_id != jwt_user_id:
-        return jsonify({"msg": "Forbidden"}), 403
+    if not _is_platform_admin(jwt_user):
+        return jsonify({"msg": "Forbidden: only platform administrators can edit apps"}), 403
 
     data = request.get_json() or {}
     validated_data, error_response = validate_update_app(data)
@@ -161,10 +245,29 @@ def update_owned_app(app_id):
     if "link" in validated_data:
         app.link = validated_data.get("link")
 
+    if "owner_id" in validated_data and validated_data.get("owner_id") is not None:
+        new_owner = Users.query.get(validated_data["owner_id"])
+        if not new_owner:
+            return jsonify({"msg": "Owner user not found"}), 400
+        app.owner_id = new_owner.id
+
     db.session.commit()
 
+    app_payload = {
+        "id": app.id,
+        "name": app.name,
+        "link": app.link,
+        "owner_id": app.owner_id,
+    }
+    if app.owner:
+        app_payload["owner"] = {
+            "id": app.owner.id,
+            "email": app.owner.email,
+            "first_name": app.owner.first_name,
+            "last_name": app.owner.last_name,
+        }
     return (
-        jsonify({"msg": "App updated successfully", "app": {"id": app.id, "name": app.name, "link": app.link}}),
+        jsonify({"msg": "App updated successfully", "app": app_payload}),
         200,
     )
 
@@ -172,11 +275,11 @@ def update_owned_app(app_id):
 @apps_bp.route("/<int:app_id>/client_id", methods=["GET"])
 @jwt_required(locations=["cookies"])
 def get_owned_client_id(app_id):
-    jwt_user_id = get_jwt_identity()
+    jwt_user = _request_user()
     app = Apps.query.get(app_id)
     if not app:
         return jsonify({"msg": "App not found"}), 404
-    if app.owner_id != jwt_user_id:
+    if not _can_manage_app(jwt_user, app):
         return jsonify({"msg": "Forbidden"}), 403
 
     return jsonify({"client_id": app.client_id}), 200
@@ -185,12 +288,12 @@ def get_owned_client_id(app_id):
 @apps_bp.route("/<int:app_id>", methods=["DELETE"])
 @jwt_required(locations=["cookies"])
 def delete_owned_app(app_id):
-    jwt_user_id = get_jwt_identity()
+    jwt_user = _request_user()
     app = Apps.query.get(app_id)
     if not app:
         return jsonify({"msg": "App not found"}), 404
-    if app.owner_id != jwt_user_id:
-        return jsonify({"msg": "Forbidden"}), 403
+    if not _is_platform_admin(jwt_user):
+        return jsonify({"msg": "Forbidden: only platform administrators can delete apps"}), 403
 
     # Permissions are tied to apps, so remove related grant records + permissions first.
     app_permissions = Permissions.query.filter_by(app_id=app_id).all()
@@ -215,11 +318,11 @@ List permissions defined for an app (owner only).
 @apps_bp.route("/<int:app_id>/permissions", methods=["GET"])
 @jwt_required(locations=["cookies"])
 def list_owned_app_permissions(app_id):
-    jwt_user_id = get_jwt_identity()
+    jwt_user = _request_user()
     app = Apps.query.get(app_id)
     if not app:
         return jsonify({"msg": "App not found"}), 404
-    if app.owner_id != jwt_user_id:
+    if not _can_manage_app(jwt_user, app):
         return jsonify({"msg": "Forbidden"}), 403
 
     rows = (
@@ -247,11 +350,11 @@ def list_owned_app_permission_grants(app_id):
     All users who have at least one permission on this app, with the list of
     permission names per user. Owner only.
     """
-    jwt_user_id = get_jwt_identity()
+    jwt_user = _request_user()
     app = Apps.query.get(app_id)
     if not app:
         return jsonify({"msg": "App not found"}), 404
-    if app.owner_id != jwt_user_id:
+    if not _can_manage_app(jwt_user, app):
         return jsonify({"msg": "Forbidden"}), 403
 
     rows = (
@@ -280,6 +383,36 @@ def list_owned_app_permission_grants(app_id):
     return jsonify({"users": list(grouped.values())}), 200
 
 
+@apps_bp.route("/<int:app_id>/users/directory", methods=["GET"])
+@jwt_required(locations=["cookies"])
+def list_app_user_directory(app_id):
+    """All registered users (for pickers). App owner or platform admin only."""
+    jwt_user = _request_user()
+    app = Apps.query.get(app_id)
+    if not app:
+        return jsonify({"msg": "App not found"}), 404
+    if not _can_manage_app(jwt_user, app):
+        return jsonify({"msg": "Forbidden"}), 403
+
+    users = Users.query.order_by(Users.email).all()
+    return (
+        jsonify(
+            {
+                "users": [
+                    {
+                        "id": u.id,
+                        "email": u.email,
+                        "first_name": u.first_name,
+                        "last_name": u.last_name,
+                    }
+                    for u in users
+                ]
+            }
+        ),
+        200,
+    )
+
+
 """
 The create_permission function allows creating a new permission that is tied
 to a specific app. Each app can define its own permission names.
@@ -300,9 +433,8 @@ def create_permission(app_id):
     if not app:
         return jsonify({"msg": "App not found"}), 404
     
-    # Only the app owner can manage permissions for their app
-    jwt_user_id = get_jwt_identity()
-    if app.owner_id != jwt_user_id:
+    jwt_user = _request_user()
+    if not _can_manage_app(jwt_user, app):
         return jsonify({"msg": "Forbidden"}), 403
 
     # Ensure permission name is unique per app
@@ -349,9 +481,8 @@ def grant_permission(app_id):
     if not app:
         return jsonify({"msg": "App not found"}), 404
     
-    # Only the app owner can grant permissions for their app
-    jwt_user_id = get_jwt_identity()
-    if app.owner_id != jwt_user_id:
+    jwt_user = _request_user()
+    if not _can_manage_app(jwt_user, app):
         return jsonify({"msg": "Forbidden"}), 403
 
     user = Users.query.get(user_id)
@@ -391,6 +522,75 @@ def grant_permission(app_id):
     )
 
 
+@apps_bp.route("/<int:app_id>/permissions/grant_bulk", methods=["POST"])
+@jwt_required(locations=["cookies"])
+def grant_permission_bulk(app_id):
+    """Grant one permission to many users by user id (owner or platform admin)."""
+    data = request.get_json() or {}
+    validated_data, error_response = validate_grant_permission_bulk(data)
+    if error_response:
+        return error_response
+
+    permission_id = validated_data["permission_id"]
+    raw_ids = validated_data["user_ids"]
+    seen = set()
+    user_ids = []
+    for uid in raw_ids:
+        if uid not in seen:
+            seen.add(uid)
+            user_ids.append(uid)
+
+    app = Apps.query.get(app_id)
+    if not app:
+        return jsonify({"msg": "App not found"}), 404
+
+    jwt_user = _request_user()
+    if not _can_manage_app(jwt_user, app):
+        return jsonify({"msg": "Forbidden"}), 403
+
+    permission = Permissions.query.get(permission_id)
+    if not permission or permission.app_id != app.id:
+        return jsonify({"msg": "Permission not found for this app"}), 404
+
+    granted = []
+    not_found = []
+    already_granted = []
+
+    for user_id in user_ids:
+        user = Users.query.get(user_id)
+        if not user:
+            not_found.append(user_id)
+            continue
+        existing = UserPermissions.query.filter_by(
+            user_id=user.id, app_id=app.id, permission_id=permission.id
+        ).first()
+        if existing:
+            already_granted.append(
+                {"user_id": user.id, "email": user.email}
+            )
+            continue
+        db.session.add(
+            UserPermissions(
+                user_id=user.id, app_id=app.id, permission_id=permission.id
+            )
+        )
+        granted.append({"user_id": user.id, "email": user.email})
+
+    db.session.commit()
+
+    return (
+        jsonify(
+            {
+                "msg": "Bulk grants processed",
+                "granted": granted,
+                "not_found": not_found,
+                "already_granted": already_granted,
+            }
+        ),
+        200,
+    )
+
+
 @apps_bp.route("/<int:app_id>/permissions/grant_by_emails", methods=["POST"])
 @jwt_required(locations=["cookies"])
 def grant_permission_by_emails(app_id):
@@ -408,8 +608,8 @@ def grant_permission_by_emails(app_id):
     if not app:
         return jsonify({"msg": "App not found"}), 404
 
-    jwt_user_id = get_jwt_identity()
-    if app.owner_id != jwt_user_id:
+    jwt_user = _request_user()
+    if not _can_manage_app(jwt_user, app):
         return jsonify({"msg": "Forbidden"}), 403
 
     permission = Permissions.query.get(permission_id)
@@ -479,9 +679,8 @@ def revoke_permission(app_id):
     if not app:
         return jsonify({"msg": "App not found"}), 404
     
-    # Only the app owner can revoke permissions for their app
-    jwt_user_id = get_jwt_identity()
-    if app.owner_id != jwt_user_id:
+    jwt_user = _request_user()
+    if not _can_manage_app(jwt_user, app):
         return jsonify({"msg": "Forbidden"}), 403
 
     user_permission = UserPermissions.query.filter_by(
