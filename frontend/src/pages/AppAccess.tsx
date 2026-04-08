@@ -339,7 +339,7 @@ function AppAccess() {
 
       <Separator className="mt-12" />
       <section className="mt-10 max-w-6xl">
-        <h2 className="text-lg font-semibold">Users with access</h2>
+        <h2 className="text-lg font-semibold">Users</h2>
         <p className="text-muted-foreground text-sm mt-1 mb-4">
           All accounts in CitID. Select users and assign a permission in bulk, or use the email
           tool above. The table sorts by access first by default (anyone with a permission appears

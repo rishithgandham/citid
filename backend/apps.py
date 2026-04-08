@@ -91,11 +91,9 @@ def create_app():
 
 
 """
-The get_user_apps route returns all apps a user has access to via permissions.
-It does NOT expose any internal identifiers (ids, client_id, owner_id), only:
-- app name
-- permission name
-- app link
+The get_user_apps route returns apps the user can access via granted permissions.
+One object per app; permissions is a sorted list of permission names.
+No internal identifiers (client_id, owner_id), only app name, link, and permission names.
 """
 @apps_bp.route("/get_user_apps", methods=["GET"])
 @jwt_required(locations=["cookies"])
@@ -107,23 +105,32 @@ def get_user_apps():
     if not user:
         return jsonify({"msg": "User not found"}), 404
 
-    # Join UserPermissions with Apps and Permissions to gather access info
     rows = (
-        db.session.query(Apps.name.label("app"), Apps.link.label("link"), Permissions.name.label("permission"))
+        db.session.query(
+            Apps.id.label("app_id"),
+            Apps.name.label("app"),
+            Apps.link.label("link"),
+            Permissions.name.label("permission"),
+        )
         .join(UserPermissions, UserPermissions.app_id == Apps.id)
         .join(Permissions, Permissions.id == UserPermissions.permission_id)
         .filter(UserPermissions.user_id == user_id)
+        .order_by(Apps.name, Permissions.name)
         .all()
     )
 
-    result = [
-        {
-            "app": row.app,
-            "permission": row.permission,
-            "link": row.link,
-        }
-        for row in rows
-    ]
+    by_app = {}
+    for row in rows:
+        aid = row.app_id
+        if aid not in by_app:
+            by_app[aid] = {
+                "app": row.app,
+                "link": row.link,
+                "permissions": [],
+            }
+        by_app[aid]["permissions"].append(row.permission)
+
+    result = sorted(by_app.values(), key=lambda x: (x["app"] or "").lower())
 
     return jsonify({"apps": result}), 200
 

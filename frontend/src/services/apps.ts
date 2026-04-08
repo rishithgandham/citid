@@ -3,10 +3,17 @@
 
 import { api } from "./axios"
 
-// Get all apps current user has access to (via permissions).
+export type AccessibleApp = {
+  app: string
+  link: string | null
+  /** Permission names granted for this app (one row per app from API). */
+  permissions: string[]
+}
+
+// Apps the current user can access; one entry per app with all permission names.
 // Backend: GET /apps/get_user_apps
 export const getAccessibleApps = async () => {
-  const response = await api.get(`/apps/get_user_apps`)
+  const response = await api.get<{ apps: AccessibleApp[] }>(`/apps/get_user_apps`)
   return response.data
 }
 
