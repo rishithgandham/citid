@@ -2,7 +2,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '../components/ui/card'
 
 import citLogo from '../assets/images/citlogo.png'
 import { Button } from '../components/ui/button'
-import { redirect, useNavigate } from 'react-router-dom'
+import { useNavigate } from 'react-router-dom'
 import { useEffect, useState } from 'react'
 import { resendVerificationEmail } from '../services/auth'
 

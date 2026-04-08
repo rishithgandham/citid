@@ -17,7 +17,7 @@ function Register() {
 
   const [loading, setLoading] = useState(false)
 
-  const { refreshProfile, isAuthenticated } = useAuth()
+  const { isAuthenticated } = useAuth()
   const navigate = useNavigate()
 
   if (isAuthenticated) {

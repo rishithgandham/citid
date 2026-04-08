@@ -48,7 +48,7 @@ function Login() {
     setLoading(true)
 
     try {
-      const response = await login(email, password)
+      await login(email, password)
       await refreshProfile()
 
       if (callbackUrl) {
