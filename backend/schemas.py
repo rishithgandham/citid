@@ -1,3 +1,5 @@
+import re
+
 from marshmallow import Schema, fields, validate, ValidationError
 from flask import jsonify
 
@@ -22,7 +24,62 @@ class RegisterSchema(Schema):
 class LoginSchema(Schema):
     email = fields.Email(required=True, error_messages={"required": "Email is required", "invalid": "Invalid email format"})
     password = fields.Str(required=True, error_messages={"required": "Password is required"})
+    
 
+class CreateAppSchema(Schema):
+    name = fields.Str(required=True, error_messages={"required": "Name is required"})
+    link = fields.Str(
+        required=False,
+        allow_none=True,
+        error_messages={"required": "Link is required"},
+    )
+    # Platform admins (Users.app_admin) may set the initial owner; others ignore this field.
+    owner_id = fields.Int(required=False, allow_none=True)
+    redirect_uris = fields.List(
+        fields.Str(validate=validate.Length(min=1, max=255)),
+        required=False,
+        load_default=list,
+    )
+
+
+class UpdateAppSchema(Schema):
+    name = fields.Str(required=True, error_messages={"required": "Name is required"})
+    link = fields.Str(required=False, allow_none=True)
+    owner_id = fields.Int(required=False, allow_none=True)
+
+class CreatePermissionSchema(Schema):
+    name = fields.Str(required=True, error_messages={"required": "Name is required"})
+    description = fields.Str(required=False, error_messages={"required": "Description is required"})
+
+class GrantPermissionSchema(Schema):
+    user_id = fields.Int(required=True, error_messages={"required": "User ID is required"})
+    permission_id = fields.Int(required=True, error_messages={"required": "Permission ID is required"})
+
+
+class RevokePermissionSchema(Schema):
+    user_id = fields.Int(required=True, error_messages={"required": "User ID is required"})
+    permission_id = fields.Int(required=True, error_messages={"required": "Permission ID is required"})
+
+
+class GrantPermissionByEmailsSchema(Schema):
+    emails = fields.Str(required=True, error_messages={"required": "Emails are required"})
+    permission_id = fields.Int(required=True, error_messages={"required": "Permission ID is required"})
+
+
+class GrantPermissionBulkSchema(Schema):
+    permission_id = fields.Int(required=True, error_messages={"required": "Permission ID is required"})
+    user_ids = fields.List(
+        fields.Int(required=True),
+        required=True,
+        validate=validate.Length(min=1, max=500, error="Provide between 1 and 500 user ids"),
+    )
+
+
+class PatchUserAdminSchema(Schema):
+    app_admin = fields.Bool(
+        required=True,
+        error_messages={"required": "app_admin is required"},
+    )
 
 
 """
@@ -33,6 +90,132 @@ Adding the validation functions here to abstract the logic from routes
 register_schema = RegisterSchema()
 login_schema = LoginSchema()
 
+create_app_schema = CreateAppSchema()
+create_permission_schema = CreatePermissionSchema()
+grant_permission_schema = GrantPermissionSchema()
+revoke_permission_schema = RevokePermissionSchema()
+grant_permission_by_emails_schema = GrantPermissionByEmailsSchema()
+grant_permission_bulk_schema = GrantPermissionBulkSchema()
+patch_user_admin_schema = PatchUserAdminSchema()
+update_app_schema = UpdateAppSchema()
+
+
+def _parse_email_list(emails_str):
+    """Split comma/semicolon/whitespace-separated emails and validate each."""
+    if emails_str is None or not str(emails_str).strip():
+        return None, "At least one email is required"
+    parts = re.split(r"[\s,;]+", str(emails_str).strip())
+    email_validator = validate.Email()
+    out = []
+    for p in parts:
+        p = p.strip()
+        if not p:
+            continue
+        try:
+            email_validator(p)
+        except ValidationError:
+            return None, f"Invalid email: {p}"
+        out.append(p.lower())
+    if not out:
+        return None, "At least one email is required"
+    return out, None
+
+
+def validate_create_app(data):
+    try:
+        validated_data = create_app_schema.load(data)
+    except ValidationError as err:
+        error_response = jsonify({"msg": "Validation error", "errors": err.messages}), 400
+        return None, error_response
+
+    raw_uris = validated_data.get("redirect_uris") or []
+    normalized = []
+    seen = set()
+    for u in raw_uris:
+        if u is None:
+            continue
+        s = str(u).strip()
+        if not s:
+            continue
+        if len(s) > 255:
+            return None, (jsonify({"msg": "Each redirect URI must be at most 255 characters"}), 400)
+        if s not in seen:
+            seen.add(s)
+            normalized.append(s)
+    validated_data["redirect_uris"] = normalized
+    return validated_data, None
+
+def validate_create_permission(data):
+    try:
+        validated_data = create_permission_schema.load(data)
+        return validated_data, None
+    except ValidationError as err:
+        error_response = jsonify({"msg": "Validation error", "errors": err.messages}), 400
+        return None, error_response
+
+def validate_grant_permission(data):
+    try:
+        validated_data = grant_permission_schema.load(data)
+        return validated_data, None
+    except ValidationError as err:
+        error_response = jsonify({"msg": "Validation error", "errors": err.messages}), 400
+        return None, error_response
+
+
+def validate_revoke_permission(data):
+    try:
+        validated_data = revoke_permission_schema.load(data)
+        return validated_data, None
+    except ValidationError as err:
+        error_response = jsonify({"msg": "Validation error", "errors": err.messages}), 400
+        return None, error_response
+
+
+def validate_patch_user_admin(data):
+    try:
+        validated_data = patch_user_admin_schema.load(data)
+        return validated_data, None
+    except ValidationError as err:
+        error_response = jsonify({"msg": "Validation error", "errors": err.messages}), 400
+        return None, error_response
+
+
+def validate_grant_permission_bulk(data):
+    try:
+        validated_data = grant_permission_bulk_schema.load(data)
+        return validated_data, None
+    except ValidationError as err:
+        error_response = jsonify({"msg": "Validation error", "errors": err.messages}), 400
+        return None, error_response
+
+
+def validate_grant_permission_by_emails(data):
+    try:
+        validated_data = grant_permission_by_emails_schema.load(data)
+    except ValidationError as err:
+        error_response = jsonify({"msg": "Validation error", "errors": err.messages}), 400
+        return None, error_response
+
+    email_list, parse_error = _parse_email_list(validated_data["emails"])
+    if parse_error:
+        return None, (jsonify({"msg": parse_error}), 400)
+
+    return (
+        {
+            "permission_id": validated_data["permission_id"],
+            "email_list": email_list,
+        },
+        None,
+    )
+
+
+def validate_update_app(data):
+    try:
+        validated_data = update_app_schema.load(data)
+        return validated_data, None
+    except ValidationError as err:
+        error_response = jsonify({"msg": "Validation error", "errors": err.messages}), 400
+        return None, error_response
 
 def validate_register(data):
     """

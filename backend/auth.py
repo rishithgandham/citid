@@ -1,13 +1,12 @@
 from datetime import timedelta
 from flask import Blueprint, current_app, redirect, request, jsonify, make_response, url_for
 from utils.email import send_email
-from models import db, Users, RefreshToken
+from models import db, Users, RefreshToken, Apps, Permissions, UserPermissions
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, set_access_cookies, create_refresh_token, set_refresh_cookies, get_jwt, unset_jwt_cookies, decode_token
 from schemas import validate_register, validate_login
 from jwt import ExpiredSignatureError
 
-# Flask Blueprint, a way to organize routes into separate files, 
-# this one is for auth routes login and register
+
 auth_bp = Blueprint("auth", __name__)
 
 
@@ -39,7 +38,7 @@ def register():
     db.session.commit() 
     
     # Send verification email
-    verification_token = create_access_token(identity=user.id, additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
+    verification_token = create_access_token(identity=str(user.id), additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
     send_email(email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
     
     
@@ -56,18 +55,18 @@ If the email is verified, it creates the auth tokens and returns it.
 def verify_email(token):
     try: 
         decoded_token = decode_token(token)
-        user_id = decoded_token["sub"]
+        user_id = int(decoded_token["sub"])
         user = Users.query.get(user_id)
         if user:
             # Set email verified to True
             user.email_verified = True
             db.session.commit()
-            return redirect('http://localhost:5173/login')
+            return redirect('http://identity.drhscit.test:5173/login')
         else:
             return jsonify({"msg": "Invalid verification token"}), 400
     except ExpiredSignatureError as e:
         return jsonify({"msg": "Verification token expired"}), 400
-    except Exception as e:
+    except Exception:
         return jsonify({"msg": "Invalid verification token"}), 400
 
 
@@ -90,7 +89,7 @@ def resend_verification_email():
     if user:
         if user.email_verified:
             return jsonify({"msg": "Email already verified"}), 400
-        verification_token = create_access_token(identity=user.id, additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
+        verification_token = create_access_token(identity=str(user.id), additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
         send_email(email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
         
     return jsonify({"msg": "If that email exists, a verification link was sent to it."}), 404
@@ -114,13 +113,13 @@ def login():
         return jsonify({"msg": "Bad credentials"}), 401
     
     if not user.email_verified:
-        verification_token = create_access_token(identity=user.id, additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
+        verification_token = create_access_token(identity=str(user.id), additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
         send_email(user.email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
         return jsonify({"msg": "Email not verified, a verification link was sent to your email"}), 403
     
     # Create JWT token and set it as HTTP cookie
-    access_token = create_access_token(identity=user.id)
-    refresh_token = create_refresh_token(identity=user.id)
+    access_token = create_access_token(identity=str(user.id))
+    refresh_token = create_refresh_token(identity=str(user.id))
     
     # Store refresh token in database
     # Decode the refresh token to get its JTI
@@ -137,6 +136,62 @@ def login():
 
 
 """
+The authorize function gets the JWT token from the request cookies and checks if the user is authorized.
+If the user is authorized, it returns a success message with the user data.
+If a client_id is provided as a query parameter, it also returns the permissions that the user has for that app.
+"""
+@auth_bp.route("/authorize", methods=["GET"])
+@jwt_required(locations=["cookies"])
+def authorize():
+    user_id = int(get_jwt_identity())
+    user = Users.query.get(user_id)
+    if not user:
+        return jsonify({"msg": "Unauthorized"}), 401
+    else:
+        # Optional client_id query parameter to return app-specific permissions
+        client_id = request.args.get("client_id")
+
+        permissions_data = None
+        if client_id:
+            # Find the app by its public client_id
+            app = Apps.query.filter_by(client_id=client_id).first()
+
+            if not app:
+                return jsonify({"msg": "App not found"}), 404
+
+            # Get all permissions the user has for this app
+            permissions = (
+                db.session.query(Permissions)
+                .join(
+                    UserPermissions,
+                    Permissions.id == UserPermissions.permission_id,
+                )
+                .filter(
+                    UserPermissions.user_id == user.id,
+                    UserPermissions.app_id == app.id,
+                )
+                .all()
+            )
+
+            permissions_data = [
+                {
+                    "name": p.name,
+                    "description": p.description,
+                }
+                for p in permissions
+            ]
+
+        response_body = {"msg": "Authorized", "user": user.to_dict()}
+
+        # Only include permissions and client_id if they were requested
+        if client_id:
+            response_body["client_id"] = client_id
+            response_body["permissions"] = permissions_data or []
+
+        return jsonify(response_body), 200
+    
+
+"""
 The refresh function gets the refresh token from the request cookies and checks if it is valid.
 If it is valid, it creates a new access token and returns it.
 """
@@ -145,7 +200,7 @@ If it is valid, it creates a new access token and returns it.
 def refresh():
     # Get the JWT token and user ID from the request cookies
     jti = get_jwt()["jti"]
-    user_id = get_jwt_identity()
+    user_id = int(get_jwt_identity())
     
     # Check if the refresh token is valid and not revoked
     token = RefreshToken.query.filter_by(jti=jti, user_id=user_id).first()
@@ -156,7 +211,7 @@ def refresh():
         
     
     # Create a new access token
-    access_token = create_access_token(identity=user_id)
+    access_token = create_access_token(identity=str(user_id))
     
     # Return response with new access token
     response = make_response(jsonify({"msg": "Token refreshed"}), 200)
@@ -169,7 +224,7 @@ The logout function gets the JWT token from the request cookies and revokes the 
 If the refresh token is valid and not revoked, it revokes it and returns a success message.
 """
 @auth_bp.route("/logout", methods=["POST"])
-@jwt_required(locations=["cookies"])
+@jwt_required(locations=["cookies"], refresh=True, verify_type=True)
 def logout():
     # Get the JWT token and user ID from the request cookies
     jti = get_jwt()["jti"]

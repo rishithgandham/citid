@@ -19,6 +19,17 @@ class Users(db.Model):
     def check_password(self, password):
         return check_password_hash(self.password_hash, password)
 
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "email": self.email,
+            "first_name": self.first_name,
+            "last_name": self.last_name,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "app_admin": self.app_admin,
+            "email_verified": self.email_verified,
+        }
+
 
 class RefreshToken(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -28,3 +39,64 @@ class RefreshToken(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
 
     user = db.relationship("Users", backref="refresh_tokens")
+    
+    
+# For External Apps Models
+
+import secrets
+
+class Apps(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(120), nullable=False)
+    link = db.Column(db.String(255), nullable=True)
+
+    # public identifier used by apps
+    client_id = db.Column(db.String(120), unique=True, nullable=False, index=True)
+
+    owner_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+
+    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    owner = db.relationship("Users", backref="apps")
+
+    def generate_client_credentials(self):
+        self.client_id = "app_" + secrets.token_urlsafe(16)
+
+
+    
+class Permissions(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    app_id = db.Column(db.Integer, db.ForeignKey("apps.id"), nullable=False)
+
+    name = db.Column(db.String(120), nullable=False)
+
+    description = db.Column(db.String(255), nullable=True)
+
+    app = db.relationship("Apps", backref="permissions")
+    
+    
+class AppRedirectURI(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    app_id = db.Column(db.Integer, db.ForeignKey("apps.id"), nullable=False)
+
+    redirect_uri = db.Column(db.String(255), nullable=False)
+
+    app = db.relationship("Apps", backref="redirect_uris")
+    
+    
+class UserPermissions(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=False)
+
+    app_id = db.Column(db.Integer, db.ForeignKey("apps.id"), nullable=False)
+
+    permission_id = db.Column(db.Integer, db.ForeignKey("permissions.id"), nullable=False)
+
+    granted_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+
+    user = db.relationship("Users", backref="user_permissions")
+    app = db.relationship("Apps")
+    permission = db.relationship("Permissions")

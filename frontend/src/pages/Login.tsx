@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useEffect, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { login } from '../services/auth'
 import { useAuth } from '../context/AuthContext'
@@ -7,21 +7,40 @@ import { Field, FieldLabel, FieldGroup } from '../components/ui/field'
 import { Input } from '../components/ui/input'
 import { Button } from '../components/ui/button'
 import citLogo from '../assets/images/citlogo.png'
+import { useSearchParams } from 'react-router-dom'
 
-
+// get callback url from query params
 function Login() {
 
+  const [searchParams] = useSearchParams()
+  const callbackUrl = searchParams.get('callbackUrl')
+
+
+
+  const navigate = useNavigate()
+
+  
+
+  
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const navigate = useNavigate()
   const { refreshProfile, isAuthenticated } = useAuth()
 
-  if (isAuthenticated) {
-    navigate('/')
-  }
+  useEffect(() => {
+    if (isAuthenticated) {
+      if (callbackUrl) {
+        window.location.href = callbackUrl;
+      } else {
+        navigate('/')
+      }
+    }
+  }, [isAuthenticated, callbackUrl, navigate])
+
+
+  
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -32,10 +51,17 @@ function Login() {
       const response = await login(email, password)
       await refreshProfile()
 
-      navigate('/')
+      if (callbackUrl) {
+        window.location.href = callbackUrl;
+      } else {
+        navigate('/')
+      }
+
     } catch (err: any) {
       setError(err.response?.data?.msg || 'Login failed. Please try again.')
+      console.log(err.response?.data?.msg)
       if (err.response?.status === 403) {
+        localStorage.setItem('email', email)
         navigate('/verify-pending')
       }
 
