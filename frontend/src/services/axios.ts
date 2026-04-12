@@ -6,16 +6,16 @@ import { refresh } from "./auth";
 
 // Axios used because of it's interceptors and ability to handle HTTP only cookies
 
-
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
 // TODO: change baseURL to enviorment variable
 export const api = axios.create({
-  baseURL: "http://identity.drhscit.test:5000",
+  baseURL: API_BASE_URL,
   withCredentials: true
 });
 
 export const refreshApi = axios.create({
-  baseURL: "http://identity.drhscit.test:5000",
+  baseURL: API_BASE_URL,
   withCredentials: true
 });
 

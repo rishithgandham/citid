@@ -12,8 +12,9 @@ export default defineConfig({
     },
   },
   server: {
-    allowedHosts: ["drhscit.test", "identity.drhscit.test", "identity.drhscit.org", "localhost"],
+    allowedHosts: ["drhscit.test", "drhscit.org", "identity.drhscit.test", "identity.drhscit.org", "localhost"],
     host: '0.0.0.0',
     port: 5173
-  }
+  },
+  envDir: path.resolve(__dirname, '../')
 })
