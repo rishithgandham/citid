@@ -1,4 +1,6 @@
-from flask import Flask, jsonify
+from pathlib import Path
+
+from flask import Flask, jsonify, send_from_directory
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from flask_cors import CORS
 from flask_mail import Mail
@@ -8,7 +10,15 @@ from apps import apps_bp
 from admin_views import admin_bp
 from config import Config
 
-app = Flask(__name__)
+# Find the path to the frontend dist folder (where react is built)
+_BACKEND_DIR = Path(__file__).resolve().parent
+_FRONTEND_DIST = _BACKEND_DIR.parent / "frontend" / "dist"
+
+app = Flask(
+    __name__,
+    static_folder=str(_FRONTEND_DIST),
+    static_url_path="/",
+)
 app.config.from_object(Config)
 
 # Enable CORS with credentials support for frontend
@@ -32,7 +42,12 @@ app.register_blueprint(apps_bp, url_prefix="/apps")
 app.register_blueprint(admin_bp, url_prefix="/admin")
 
 
-# Dont know what is does, but creates the tables in the db before the first request
+# SERVE REACT VITE APP FROM BACKEND FLASK
+@app.route("/")
+def index():
+    return send_from_directory(app.static_folder, "index.html")
+
+# creates the tables in the db before the first request
 # with app.app_context():
 #     db.drop_all()
 #     db.create_all()
