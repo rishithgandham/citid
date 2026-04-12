@@ -3,7 +3,7 @@ import os
 from dotenv import load_dotenv
 
 # Load environment variables from .env file
-load_dotenv()
+load_dotenv("../.env")
 
 class Config:
     SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-key-change-in-production")
@@ -24,6 +24,8 @@ class Config:
     
     SERVER_NAME = os.getenv("SERVER_NAME", "drhscit.test:5000")
     COOKIE_DOMAIN = os.getenv("COOKIE_DOMAIN", "drhscit.test")
+    
+    
     MAIL_SERVER = 'smtp.gmail.com'
     MAIL_PORT = 587
     MAIL_USE_TLS = True
