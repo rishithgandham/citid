@@ -12,7 +12,7 @@ from schemas import (
     validate_revoke_permission,
     validate_update_app,
 )
-from models import db, Users, Apps, Permissions, UserPermissions, AppRedirectURI
+from models import db, Users, Apps, Permissions, UserPermissions
 
 
 apps_bp = Blueprint("apps", __name__)
@@ -311,7 +311,6 @@ def delete_owned_app(app_id):
             synchronize_session=False
         )
     Permissions.query.filter_by(app_id=app_id).delete(synchronize_session=False)
-    AppRedirectURI.query.filter_by(app_id=app_id).delete(synchronize_session=False)
 
     db.session.delete(app)
     db.session.commit()

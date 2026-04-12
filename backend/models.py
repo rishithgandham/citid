@@ -74,18 +74,8 @@ class Permissions(db.Model):
     description = db.Column(db.String(255), nullable=True)
 
     app = db.relationship("Apps", backref="permissions")
-    
-    
-class AppRedirectURI(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
 
-    app_id = db.Column(db.Integer, db.ForeignKey("apps.id"), nullable=False)
 
-    redirect_uri = db.Column(db.String(255), nullable=False)
-
-    app = db.relationship("Apps", backref="redirect_uris")
-    
-    
 class UserPermissions(db.Model):
     id = db.Column(db.Integer, primary_key=True)
 

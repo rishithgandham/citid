@@ -25,7 +25,6 @@ mail = Mail(app)
 # Blueprint is a way to organize routes into separate files
 app.register_blueprint(auth_bp, url_prefix="/auth")
 
-
 # Register the apps blueprint from apps.py
 app.register_blueprint(apps_bp, url_prefix="/apps")
 
