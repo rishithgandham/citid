@@ -1,6 +1,6 @@
 from pathlib import Path
 
-from flask import Flask, jsonify, send_from_directory
+from flask import Flask, jsonify, make_response, request, send_from_directory
 from flask_jwt_extended import JWTManager, jwt_required, get_jwt_identity
 from flask_cors import CORS
 from flask_mail import Mail
@@ -9,6 +9,18 @@ from auth import auth_bp
 from apps import apps_bp
 from admin_views import admin_bp
 from config import Config
+
+# Browser origins allowed to call this API with credentials (no env — edit here if you add hosts).
+_ALLOWED_ORIGINS = frozenset(
+    {
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://identity.drhscit.test:5173",
+        "http://drhscit.test:5173",
+        "http://identity.drhscit.org",
+        "http://drhscit.org",
+    }
+)
 
 # Find the path to the frontend dist folder (where react is built)
 _BACKEND_DIR = Path(__file__).resolve().parent
@@ -21,8 +33,44 @@ app = Flask(
 )
 app.config.from_object(Config)
 
-# Enable CORS with credentials support for frontend
-CORS(app, origins=["http://localhost:5173", "http://identity.drhscit.test:5173", "http://identity.drhscit.org", "http://drhscit.org", 'http://drhscit.test:5173'], supports_credentials=True)
+
+# @app.before_request
+# def _answer_cors_preflight():
+#     """Short-circuit OPTIONS so preflight never depends on routing, static files, or JWT."""
+#     if request.method != "OPTIONS":
+#         return None
+#     origin = request.headers.get("Origin")
+#     if not origin or origin not in _ALLOWED_ORIGINS:
+#         return None
+#     resp = make_response("", 204)
+#     resp.headers["Access-Control-Allow-Origin"] = origin
+#     resp.headers["Access-Control-Allow-Credentials"] = "true"
+#     resp.headers["Access-Control-Allow-Methods"] = "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT"
+#     req_headers = request.headers.get("Access-Control-Request-Headers")
+#     if req_headers:
+#         resp.headers["Access-Control-Allow-Headers"] = req_headers
+#     resp.headers["Access-Control-Max-Age"] = "86400"
+#     return resp
+
+
+# @app.after_request
+# def _cors_if_missing(response):
+#     """Flask-CORS normally handles this; this fills in ACAO if something else skipped it."""
+#     if response.headers.get("Access-Control-Allow-Origin"):
+#         return response
+#     origin = request.headers.get("Origin")
+#     if origin and origin in _ALLOWED_ORIGINS:
+#         response.headers["Access-Control-Allow-Origin"] = origin
+#         response.headers["Access-Control-Allow-Credentials"] = "true"
+#         if request.method == "OPTIONS":
+#             response.headers["Access-Control-Allow-Methods"] = "DELETE, GET, HEAD, OPTIONS, PATCH, POST, PUT"
+#             req_headers = request.headers.get("Access-Control-Request-Headers")
+#             if req_headers:
+#                 response.headers["Access-Control-Allow-Headers"] = req_headers
+#     return response
+
+
+CORS(app, origins=list(_ALLOWED_ORIGINS), supports_credentials=True)
 
 # Initialize the database and JWT manager
 db.init_app(app)
@@ -45,7 +93,11 @@ app.register_blueprint(admin_bp, url_prefix="/admin")
 # SERVE REACT VITE APP FROM BACKEND FLASK
 @app.route("/")
 def index():
-    return send_from_directory(app.static_folder, "index.html")
+    return send_from_directory(_FRONTEND_DIST, "index.html")
+
+
+# Apply CORS after routes exist (avoids edge cases with static / catch-all ordering).
+CORS(app, origins=list(_ALLOWED_ORIGINS), supports_credentials=True)
 
 # creates the tables in the db before the first request
 # with app.app_context():
