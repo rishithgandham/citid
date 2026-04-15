@@ -271,16 +271,20 @@ def update_owned_app(app_id):
             return jsonify({"msg": "Owner user not found"}), 400
         app.owner_id = new_owner.id
 
+    changes = {}
+    if original_name != app.name:
+        changes["name"] = {"from": original_name, "to": app.name}
+    if original_link != app.link:
+        changes["link"] = {"from": original_link, "to": app.link}
+    if original_owner_id != app.owner_id:
+        changes["owner_id"] = {"from": original_owner_id, "to": app.owner_id}
+
     add_audit_log(
         action="app_updated",
         target_type="app",
         actor_user_id=jwt_user.id,
         target_id=app.id,
-        details={
-            "name": {"from": original_name, "to": app.name},
-            "link": {"from": original_link, "to": app.link},
-            "owner_id": {"from": original_owner_id, "to": app.owner_id},
-        },
+        details={"changes": changes},
     )
     db.session.commit()
 

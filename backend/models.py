@@ -93,6 +93,7 @@ class UserPermissions(db.Model):
 
 
 class AuditLog(db.Model):
+    """API-level audit events; actor_user_id can be null for anonymous/system actions."""
     id = db.Column(db.Integer, primary_key=True)
     actor_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
     action = db.Column(db.String(120), nullable=False)
