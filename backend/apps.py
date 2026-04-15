@@ -256,36 +256,40 @@ def update_owned_app(app_id):
     if error_response:
         return error_response
 
-    original_name = app.name
-    original_link = app.link
-    original_owner_id = app.owner_id
-
-    app.name = validated_data["name"]
-    # Allow leaving link unchanged by omitting it
-    if "link" in validated_data:
-        app.link = validated_data.get("link")
-
+    proposed_owner_id = app.owner_id
     if "owner_id" in validated_data and validated_data.get("owner_id") is not None:
         new_owner = Users.query.get(validated_data["owner_id"])
         if not new_owner:
             return jsonify({"msg": "Owner user not found"}), 400
-        app.owner_id = new_owner.id
+        proposed_owner_id = new_owner.id
+
+    original_name = app.name
+    original_link = app.link
+    original_owner_id = app.owner_id
+
+    proposed_name = validated_data["name"]
+    proposed_link = validated_data.get("link", app.link)
 
     changes = {}
-    if original_name != app.name:
-        changes["name"] = {"from": original_name, "to": app.name}
-    if original_link != app.link:
-        changes["link"] = {"from": original_link, "to": app.link}
-    if original_owner_id != app.owner_id:
-        changes["owner_id"] = {"from": original_owner_id, "to": app.owner_id}
+    if original_name != proposed_name:
+        changes["name"] = {"from": original_name, "to": proposed_name}
+    if original_link != proposed_link:
+        changes["link"] = {"from": original_link, "to": proposed_link}
+    if original_owner_id != proposed_owner_id:
+        changes["owner_id"] = {"from": original_owner_id, "to": proposed_owner_id}
 
-    add_audit_log(
-        action="app_updated",
-        target_type="app",
-        actor_user_id=jwt_user.id,
-        target_id=app.id,
-        details={"changes": changes},
-    )
+    app.name = proposed_name
+    app.link = proposed_link
+    app.owner_id = proposed_owner_id
+
+    if changes:
+        add_audit_log(
+            action="app_updated",
+            target_type="app",
+            actor_user_id=jwt_user.id,
+            target_id=app.id,
+            details={"changes": changes},
+        )
     db.session.commit()
 
     app_payload = {
