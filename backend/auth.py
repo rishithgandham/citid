@@ -4,6 +4,7 @@ from utils.email import send_email
 from models import db, Users, RefreshToken, Apps, Permissions, UserPermissions
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, set_access_cookies, create_refresh_token, set_refresh_cookies, get_jwt, unset_jwt_cookies, decode_token
 from schemas import validate_register, validate_login
+from utils.audit import add_audit_log
 from jwt import ExpiredSignatureError
 
 
@@ -35,6 +36,14 @@ def register():
     user = Users(email=email, first_name=first_name, last_name=last_name)
     user.set_password(password)
     db.session.add(user)
+    db.session.flush()
+    add_audit_log(
+        action="user_registered",
+        target_type="user",
+        actor_user_id=user.id,
+        target_id=user.id,
+        details={"email": user.email},
+    )
     db.session.commit() 
     
     # Send verification email
@@ -60,6 +69,12 @@ def verify_email(token):
         if user:
             # Set email verified to True
             user.email_verified = True
+            add_audit_log(
+                action="email_verified",
+                target_type="user",
+                actor_user_id=user.id,
+                target_id=user.id,
+            )
             db.session.commit()
             return redirect('http://identity.drhscit.test:5173/login')
         else:
@@ -126,6 +141,12 @@ def login():
     decoded_token = decode_token(refresh_token)
     jti = decoded_token["jti"]
     db.session.add(RefreshToken(jti=jti, user_id=user.id))
+    add_audit_log(
+        action="user_login",
+        target_type="user",
+        actor_user_id=user.id,
+        target_id=user.id,
+    )
     db.session.commit()
     
     # Return response with access and refresh tokens
@@ -228,15 +249,21 @@ If the refresh token is valid and not revoked, it revokes it and returns a succe
 def logout():
     # Get the JWT token and user ID from the request cookies
     jti = get_jwt()["jti"]
+    user_id = int(get_jwt_identity())
     
     # Check if the refresh token is valid and not revoked
     token = RefreshToken.query.filter_by(jti=jti).first()
     if token: 
         token.revoked = True
+        add_audit_log(
+            action="user_logout",
+            target_type="user",
+            actor_user_id=user_id,
+            target_id=user_id,
+        )
         db.session.commit()
     
     # Return response with success message
     response = make_response(jsonify({"msg": "Logout successful"}), 200)
     unset_jwt_cookies(response)
     return response
-

@@ -13,6 +13,7 @@ from schemas import (
     validate_update_app,
 )
 from models import db, Users, Apps, Permissions, UserPermissions
+from utils.audit import add_audit_log
 
 
 apps_bp = Blueprint("apps", __name__)
@@ -71,6 +72,14 @@ def create_app():
     app.generate_client_credentials()
 
     db.session.add(app)
+    db.session.flush()
+    add_audit_log(
+        action="app_created",
+        target_type="app",
+        actor_user_id=current_user.id,
+        target_id=app.id,
+        details={"name": app.name, "owner_id": app.owner_id},
+    )
     db.session.commit()
 
     return (
@@ -247,6 +256,10 @@ def update_owned_app(app_id):
     if error_response:
         return error_response
 
+    original_name = app.name
+    original_link = app.link
+    original_owner_id = app.owner_id
+
     app.name = validated_data["name"]
     # Allow leaving link unchanged by omitting it
     if "link" in validated_data:
@@ -258,6 +271,17 @@ def update_owned_app(app_id):
             return jsonify({"msg": "Owner user not found"}), 400
         app.owner_id = new_owner.id
 
+    add_audit_log(
+        action="app_updated",
+        target_type="app",
+        actor_user_id=jwt_user.id,
+        target_id=app.id,
+        details={
+            "name": {"from": original_name, "to": app.name},
+            "link": {"from": original_link, "to": app.link},
+            "owner_id": {"from": original_owner_id, "to": app.owner_id},
+        },
+    )
     db.session.commit()
 
     app_payload = {
@@ -312,6 +336,13 @@ def delete_owned_app(app_id):
         )
     Permissions.query.filter_by(app_id=app_id).delete(synchronize_session=False)
 
+    add_audit_log(
+        action="app_deleted",
+        target_type="app",
+        actor_user_id=jwt_user.id,
+        target_id=app.id,
+        details={"name": app.name},
+    )
     db.session.delete(app)
     db.session.commit()
 
@@ -449,6 +480,14 @@ def create_permission(app_id):
 
     permission = Permissions(name=name, description=description, app_id=app.id)
     db.session.add(permission)
+    db.session.flush()
+    add_audit_log(
+        action="permission_created",
+        target_type="permission",
+        actor_user_id=jwt_user.id,
+        target_id=permission.id,
+        details={"app_id": app.id, "name": permission.name},
+    )
     db.session.commit()
 
     return (
@@ -510,6 +549,18 @@ def grant_permission(app_id):
         user_id=user.id, app_id=app.id, permission_id=permission.id
     )
     db.session.add(user_permission)
+    db.session.flush()
+    add_audit_log(
+        action="permission_granted",
+        target_type="user_permission",
+        actor_user_id=jwt_user.id,
+        target_id=user_permission.id,
+        details={
+            "app_id": app.id,
+            "user_id": user.id,
+            "permission_id": permission.id,
+        },
+    )
     db.session.commit()
 
     return (
@@ -582,6 +633,19 @@ def grant_permission_bulk(app_id):
         )
         granted.append({"user_id": user.id, "email": user.email})
 
+    add_audit_log(
+        action="permission_granted_bulk",
+        target_type="app_permission",
+        actor_user_id=jwt_user.id,
+        target_id=app.id,
+        details={
+            "app_id": app.id,
+            "permission_id": permission.id,
+            "granted_count": len(granted),
+            "already_granted_count": len(already_granted),
+            "not_found_count": len(not_found),
+        },
+    )
     db.session.commit()
 
     return (
@@ -650,6 +714,19 @@ def grant_permission_by_emails(app_id):
         db.session.add(user_permission)
         granted.append({"email": user.email, "user_id": user.id})
 
+    add_audit_log(
+        action="permission_granted_by_emails",
+        target_type="app_permission",
+        actor_user_id=jwt_user.id,
+        target_id=app.id,
+        details={
+            "app_id": app.id,
+            "permission_id": permission.id,
+            "granted_count": len(granted),
+            "already_granted_count": len(already_granted),
+            "not_found_count": len(not_found),
+        },
+    )
     db.session.commit()
 
     return (
@@ -696,8 +773,18 @@ def revoke_permission(app_id):
     if not user_permission:
         return jsonify({"msg": "Permission not found for this user and app"}), 404
 
+    add_audit_log(
+        action="permission_revoked",
+        target_type="user_permission",
+        actor_user_id=jwt_user.id,
+        target_id=user_permission.id,
+        details={
+            "app_id": app.id,
+            "user_id": user_id,
+            "permission_id": permission_id,
+        },
+    )
     db.session.delete(user_permission)
     db.session.commit()
 
     return jsonify({"msg": "Permission revoked successfully"}), 200
-

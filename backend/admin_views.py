@@ -3,6 +3,7 @@ from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from models import db, Users
 from schemas import validate_patch_user_admin
+from utils.audit import add_audit_log
 
 
 admin_bp = Blueprint("admin", __name__)
@@ -56,7 +57,7 @@ def list_all_users():
 @jwt_required(locations=["cookies"])
 def patch_user_admin_flags(user_id):
     """Set platform admin (app_admin) flag for a user."""
-    _, err = _require_platform_admin()
+    admin_user, err = _require_platform_admin()
     if err:
         return err
 
@@ -86,6 +87,13 @@ def patch_user_admin_flags(user_id):
             )
 
     target.app_admin = want_admin
+    add_audit_log(
+        action="platform_admin_flag_updated",
+        target_type="user",
+        actor_user_id=admin_user.id,
+        target_id=target.id,
+        details={"app_admin": bool(target.app_admin)},
+    )
     db.session.commit()
 
     return (
