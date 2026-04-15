@@ -99,7 +99,9 @@ class AuditLog(db.Model):
     target_type = db.Column(db.String(120), nullable=False)
     target_id = db.Column(db.String(120), nullable=True)
     details = db.Column(db.Text, nullable=True)
-    created_at = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    created_at = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
 
     actor = db.relationship("Users", backref="audit_logs")
 
@@ -108,7 +110,7 @@ class AuditLog(db.Model):
         if self.details:
             try:
                 parsed_details = json.loads(self.details)
-            except Exception:
+            except json.JSONDecodeError:
                 parsed_details = self.details
 
         return {
