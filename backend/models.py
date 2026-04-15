@@ -1,4 +1,4 @@
-import datetime
+import json
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from datetime import datetime, timezone
@@ -90,3 +90,36 @@ class UserPermissions(db.Model):
     user = db.relationship("Users", backref="user_permissions")
     app = db.relationship("Apps")
     permission = db.relationship("Permissions")
+
+
+class AuditLog(db.Model):
+    """API-level audit events; actor_user_id can be null for anonymous/system actions."""
+    id = db.Column(db.Integer, primary_key=True)
+    actor_user_id = db.Column(db.Integer, db.ForeignKey("users.id"), nullable=True)
+    action = db.Column(db.String(120), nullable=False)
+    target_type = db.Column(db.String(120), nullable=False)
+    target_id = db.Column(db.String(120), nullable=True)
+    details = db.Column(db.Text, nullable=True)
+    created_at = db.Column(
+        db.DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+    actor = db.relationship("Users", backref="audit_logs")
+
+    def to_dict(self):
+        parsed_details = None
+        if self.details:
+            try:
+                parsed_details = json.loads(self.details)
+            except json.JSONDecodeError:
+                parsed_details = self.details
+
+        return {
+            "id": self.id,
+            "actor_user_id": self.actor_user_id,
+            "action": self.action,
+            "target_type": self.target_type,
+            "target_id": self.target_id,
+            "details": parsed_details,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

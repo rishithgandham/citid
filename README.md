@@ -326,12 +326,13 @@ If the user isn't logged in (no valid cookie), the authorize endpoint returns a 
 
 ## Database schema (see `backend/models.py`)
 
-Four main tables power the permissions system:
+Five main tables power the permissions and audit system:
 
 - **`Users`** -- email, hashed password, name, `app_admin` flag, `email_verified` flag
 - **`Apps`** -- name, link, `client_id` (auto-generated `app_` + random token), `owner_id` (FK to Users)
 - **`Permissions`** -- name, description, `app_id` (FK to Apps). Names are unique per app.
 - **`UserPermissions`** -- the join table: `user_id` + `app_id` + `permission_id`. This is the source of truth for "who can do what on which app."
+- **`AuditLog`** -- API-level audit records for sensitive actions (actor, action, target, details, timestamp).
 
 There's also a **`RefreshToken`** table that stores each refresh token's `jti` and a `revoked` boolean for the logout/blocklist system.
 
@@ -345,10 +346,11 @@ There's also a **`RefreshToken`** table that stores each refresh token's `jti` a
 | **`auth.py`** | Auth blueprint (`/auth/*`). Registration, email verification, login, refresh, logout, and the `/authorize` endpoint that external apps call. |
 | **`apps.py`** | Apps blueprint (`/apps/*`). CRUD for apps, permission definitions, and all the grant/revoke endpoints (single, bulk by ID, bulk by email). |
 | **`admin_views.py`** | Admin blueprint (`/admin/*`). Lists all users and lets platform admins toggle the `app_admin` flag. |
-| **`models.py`** | SQLAlchemy models: `Users`, `RefreshToken`, `Apps`, `Permissions`, `UserPermissions`. |
+| **`models.py`** | SQLAlchemy models: `Users`, `RefreshToken`, `Apps`, `Permissions`, `UserPermissions`, `AuditLog`. |
 | **`schemas.py`** | Marshmallow validation schemas for every form/request body (register, login, create app, create permission, grant, revoke, etc.). Each schema has a corresponding `validate_*` function that returns `(data, None)` or `(None, error_response)`. |
 | **`config.py`** | Loads `.env` from the repo root. JWT settings (cookie location, expiration, domain), database URI, mail server config. |
 | **`utils/email.py`** | Thin wrapper around Flask-Mail. One function: `send_email(to, subject, html_body)`. |
+| **`utils/audit.py`** | Shared helper for API-level audit writes (`add_audit_log`) used by auth, app management, and admin mutation endpoints. |
 
 ---
 
@@ -453,6 +455,6 @@ This is a working prototype and proof of concept, here's things that still need 
 - **Move away from setting cookies directly.** The shared-cookie approach works but causes real friction for local development -- HTTP-only cookies are hard to work around, and school computers can't edit their hosts file to fake `drhscit.org` pointing at localhost. A better model: CIT ID just returns the user's permissions for a given app via the authorize endpoint, and the actual cookie-setting logic lives in a shared library or boilerplate code that each app copies in. That way each app manages its own session cookies on its own domain.
 - **Authorized redirect URIs.** The schema already accepts `redirect_uris` when creating an app, but they're not enforced yet. This would let CIT ID verify that an authorization request is coming from a legitimate origin before responding.
 - **Forgot password.** Not implemented yet.
-- **Audit logs.** Application-level audit logging will be added soon. Database-level audit logs (think PostgreSQL triggers that capture every row change) are a longer-term goal.
+- **Audit logs.** API-level audit logging is now implemented in backend routes via a shared helper and `AuditLog` table. Database-level row-change triggers (e.g., PostgreSQL triggers) are still a longer-term goal.
 - **Security hardening.** Right now `JWT_COOKIE_SECURE` is false and CSRF protection is disabled in `config.py` — fine for local dev, not okay for production. Before deploying: enable `JWT_COOKIE_SECURE = True` (requires HTTPS), turn on `JWT_COOKIE_CSRF_PROTECT`, and enforce HTTPS across the board. Rate limiting on auth endpoints (login, register, refresh) should also be added to prevent brute-force attacks.
 - **Hosting.** Didn't get to it this time around. The idea is to use a GitHub Action that builds the React frontend, SSHs into the web server, and updates the code in place. Docker is another option worth exploring.
