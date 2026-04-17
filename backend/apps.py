@@ -12,7 +12,7 @@ from schemas import (
     validate_revoke_permission,
     validate_update_app,
 )
-from models import db, Users, Apps, Permissions, UserPermissions
+from models import AuditLog, db, Users, Apps, Permissions, UserPermissions
 
 
 apps_bp = Blueprint("apps", __name__)
@@ -71,6 +71,11 @@ def create_app():
     app.generate_client_credentials()
 
     db.session.add(app)
+    db.session.commit()
+
+    curUser = _request_user()
+    audit = AuditLog(eventType="app changes", description="User created an app", userID=curUser.id, userEmail=curUser.email)
+    db.session.add(audit)
     db.session.commit()
 
     return (
@@ -273,6 +278,12 @@ def update_owned_app(app_id):
             "first_name": app.owner.first_name,
             "last_name": app.owner.last_name,
         }
+
+    curUser = _request_user()
+    audit = AuditLog(eventType="app changes", description="User edited an app", userID=curUser.id, userEmail=curUser.email)
+    db.session.add(audit)
+    db.session.commit()
+
     return (
         jsonify({"msg": "App updated successfully", "app": app_payload}),
         200,
@@ -313,6 +324,11 @@ def delete_owned_app(app_id):
     Permissions.query.filter_by(app_id=app_id).delete(synchronize_session=False)
 
     db.session.delete(app)
+    db.session.commit()
+
+    curUser = _request_user()
+    audit = AuditLog(eventType="app changes", description="User deleted an app", userID=curUser.id, userEmail=curUser.email)
+    db.session.add(audit)
     db.session.commit()
 
     return jsonify({"msg": "App deleted successfully"}), 200
@@ -451,6 +467,11 @@ def create_permission(app_id):
     db.session.add(permission)
     db.session.commit()
 
+    curUser = _request_user()
+    audit = AuditLog(eventType="perm change", description="User created a permission", userID=curUser.id, userEmail=curUser.email)
+    db.session.add(audit)
+    db.session.commit()
+
     return (
         jsonify(
             {
@@ -510,6 +531,11 @@ def grant_permission(app_id):
         user_id=user.id, app_id=app.id, permission_id=permission.id
     )
     db.session.add(user_permission)
+    db.session.commit()
+
+    curUser = _request_user()
+    audit = AuditLog(eventType="perm change", description="User gave a permission to someone", userID=curUser.id, userEmail=curUser.email)
+    db.session.add(audit)
     db.session.commit()
 
     return (
@@ -584,6 +610,11 @@ def grant_permission_bulk(app_id):
 
     db.session.commit()
 
+    curUser = _request_user()
+    audit = AuditLog(eventType="perm change", description="User mass granted a permission", userID=curUser.id, userEmail=curUser.email)
+    db.session.add(audit)
+    db.session.commit()
+
     return (
         jsonify(
             {
@@ -652,6 +683,11 @@ def grant_permission_by_emails(app_id):
 
     db.session.commit()
 
+    curUser = _request_user()
+    audit = AuditLog(eventType="perm change", description="User granted permissions by email", userID=curUser.id, userEmail=curUser.email)
+    db.session.add(audit)
+    db.session.commit()
+
     return (
         jsonify(
             {
@@ -697,6 +733,11 @@ def revoke_permission(app_id):
         return jsonify({"msg": "Permission not found for this user and app"}), 404
 
     db.session.delete(user_permission)
+    db.session.commit()
+
+    curUser = _request_user()
+    audit = AuditLog(eventType="perm change", description="User revoked a permission for a user", userID=curUser.id, userEmail=curUser.email)
+    db.session.add(audit)
     db.session.commit()
 
     return jsonify({"msg": "Permission revoked successfully"}), 200
