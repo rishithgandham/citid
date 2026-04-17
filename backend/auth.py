@@ -5,9 +5,14 @@ from models import db, Users, RefreshToken, Apps, Permissions, UserPermissions
 from flask_jwt_extended import create_access_token, get_jwt_identity, jwt_required, set_access_cookies, create_refresh_token, set_refresh_cookies, get_jwt, unset_jwt_cookies, decode_token
 from schemas import validate_register, validate_login
 from jwt import ExpiredSignatureError
+from models import AuditLog
 
 
 auth_bp = Blueprint("auth", __name__)
+
+def _request_user():
+    uid = int(get_jwt_identity())
+    return Users.query.get(uid)
 
 
 """
@@ -40,7 +45,10 @@ def register():
     # Send verification email
     verification_token = create_access_token(identity=str(user.id), additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
     send_email(email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
-    
+    curUser = _request_user()
+    audit = AuditLog(eventType="verification", description="User was sent a verification email", userID=curUser.id, userEmail=curUser.email)            
+    db.session.add(audit)
+    db.session.commit()
     
     response = make_response(jsonify({"msg": "User created successfully, please check your email for verification"}), 201)
 
@@ -59,6 +67,11 @@ def verify_email(token):
         user = Users.query.get(user_id)
         if user:
             # Set email verified to True
+            curUser = _request_user()
+            audit = AuditLog(eventType="verification", description="Users email was verified", userID=curUser.id, userEmail=curUser.email)
+            db.session.add(audit)
+            db.session.commit()
+
             user.email_verified = True
             db.session.commit()
             return redirect('http://identity.drhscit.test:5173/login')
@@ -91,7 +104,12 @@ def resend_verification_email():
             return jsonify({"msg": "Email already verified"}), 400
         verification_token = create_access_token(identity=str(user.id), additional_claims={'type': 'email_verification'}, expires_delta=timedelta(minutes=15))
         send_email(email, "Verify Your Email", f"Click this link to verify your email: {url_for('auth.verify_email', token=verification_token, _external=True)}")
-        
+    
+    curUser = _request_user()
+    audit = AuditLog(eventType="verification", description="User was resent a verification email", userID=curUser.id, userEmail=curUser.email)            
+    db.session.add(audit)
+    db.session.commit()
+
     return jsonify({"msg": "If that email exists, a verification link was sent to it."}), 404
 
 """
@@ -126,6 +144,11 @@ def login():
     decoded_token = decode_token(refresh_token)
     jti = decoded_token["jti"]
     db.session.add(RefreshToken(jti=jti, user_id=user.id))
+    db.session.commit()
+
+    curUser = _request_user()
+    audit = AuditLog(eventType="login event", description="User logged in", userID=curUser.id, userEmail=curUser.email)
+    db.session.add(audit)
     db.session.commit()
     
     # Return response with access and refresh tokens
@@ -228,6 +251,11 @@ If the refresh token is valid and not revoked, it revokes it and returns a succe
 def logout():
     # Get the JWT token and user ID from the request cookies
     jti = get_jwt()["jti"]
+
+    curUser = _request_user()
+    audit = AuditLog(eventType="login event", description="User logged out", userID=curUser.id, userEmail=curUser.email)            
+    db.session.add(audit)
+    db.session.commit()
     
     # Check if the refresh token is valid and not revoked
     token = RefreshToken.query.filter_by(jti=jti).first()

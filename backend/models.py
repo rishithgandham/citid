@@ -90,3 +90,15 @@ class UserPermissions(db.Model):
     user = db.relationship("Users", backref="user_permissions")
     app = db.relationship("Apps")
     permission = db.relationship("Permissions")
+
+
+class AuditLog(db.Model):
+    timestamp = db.Column(db.DateTime, default=datetime.now(timezone.utc))
+    eventType = db.Column(db.String(255))
+    description = db.Column(db.String(255))
+    userID = db.Column(db.Integer, nullable=True)
+    userEmail = db.Column(db.String(256), nullable=True)
+    #These three are currently not used. 
+    impactID = db.Column(db.Integer, nullable=True)
+    impactEmail = db.Column(db.String(256), nullable=True)
+    ipAddress = db.Column(db.String(40), nullable=True)
